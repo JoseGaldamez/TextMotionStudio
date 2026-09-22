@@ -10,6 +10,10 @@ import type {Caption, CaptionStyle, VideoProject} from './models';
 import {GetAppConfig, UpdateAppConfig} from '../wailsjs/go/main/App';
 import type {config} from '../wailsjs/go/models';
 import {getCopy, type Language} from './i18n';
+import {StylesView} from './components/views/StylesView';
+import {TemplatesView} from './components/views/TemplatesView';
+import {ExportView} from './components/views/ExportView';
+import {SettingsView} from './components/views/SettingsView';
 
 const mockCaptions: Caption[] = [
     {id: 'c1', text: 'Great ideas', start: 0, end: 4.2},
@@ -116,6 +120,16 @@ function App() {
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     };
 
+    const handleLanguageChange = async (newLang: Language) => {
+        if (!appConfig) return;
+        try {
+            const updated = await UpdateAppConfig(appConfig.onboardingCompleted, appConfig.modelInstalled, newLang);
+            setAppConfig(updated);
+        } catch (err) {
+            console.error('Failed to update language', err);
+        }
+    };
+
     if (!appConfig) return <AppFrame><main className="grid h-full min-w-[1280px] place-items-center bg-background text-foreground">
         {configError ? <div className="text-center"><p className="mb-5 text-sm text-muted" role="alert">{configError}</p><button className="cursor-pointer rounded-[10px] bg-primary px-5 py-3 text-sm font-bold hover:bg-primary-hover" onClick={() => {setConfigError(''); setLoadAttempt(attempt => attempt + 1)}}>{copy.app.retry}</button></div> : <p className="text-sm text-muted">{copy.app.loading}</p>}
     </main></AppFrame>;
@@ -126,29 +140,73 @@ function App() {
     }}/></AppFrame>;
 
     return (
-        <AppFrame language={language}><main className="grid h-full min-w-[1280px] grid-cols-[214px_370px_minmax(0,1fr)] overflow-hidden bg-background text-foreground text-left max-[1320px]:grid-cols-[188px_334px_minmax(0,1fr)]">
+        <AppFrame language={language}><main className={`grid h-full min-w-[1280px] overflow-hidden bg-background text-foreground text-left ${
+            activeNav === 'Create'
+                ? 'grid-cols-[214px_370px_minmax(0,1fr)] max-[1320px]:grid-cols-[188px_334px_minmax(0,1fr)]'
+                : 'grid-cols-[214px_minmax(0,1fr)] max-[1320px]:grid-cols-[188px_minmax(0,1fr)]'
+        }`}>
             <Sidebar activeItem={activeNav} onSelect={setActiveNav} language={language}/>
-            <WorkflowPanel project={project} styles={styles} captionsReady={captionsReady} isGenerating={isGenerating} language={language} onVideoSelect={selectVideo} onGenerate={generateCaptions} onStyleSelect={(selectedStyle) => setProject((current) => ({...current, selectedStyle}))}/>
-            <section className="workspace-grid grid min-h-0 min-w-0 overflow-hidden bg-[#0d121b] p-[18px] max-[1320px]:px-3" style={{'--video-flex': `${videoFraction}fr`, '--timeline-flex': `${1 - videoFraction}fr`} as CSSProperties} aria-label={copy.app.workspace}>
-                <header className="flex items-center justify-between px-1 text-xs text-[#7f899b]"><div className="flex min-w-0 items-center gap-2"><span className="size-[7px] rounded-full bg-[#41b882] shadow-[0_0_0_3px_rgba(65,184,130,.09)]" aria-hidden="true"/><span className="overflow-hidden text-ellipsis whitespace-nowrap">{project.videoName ?? copy.app.untitled}</span></div><p className="m-0">{copy.app.tagline}</p></header>
-                <div ref={videoPanelRef} className="min-h-0"><VideoPreview videoUrl={project.videoUrl} captionStyle={project.selectedStyle.id} activeCaption={activeCaption} playbackTime={playbackTime} videoDuration={videoDuration} onPlaybackTimeChange={setPlaybackTime} onDurationChange={setVideoDuration} seekRequest={seekRequest} onSeek={seekTo} language={language}/></div>
-                <div role="separator" tabIndex={0} aria-label={copy.app.resizePanels} aria-orientation="horizontal" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(videoFraction * 100)} className="group flex cursor-row-resize touch-none items-center justify-center focus-visible:outline-2 focus-visible:outline-highlight" onPointerDown={event => {
-                    const videoHeight = videoPanelRef.current?.getBoundingClientRect().height ?? 0;
-                    const timelineHeight = timelinePanelRef.current?.getBoundingClientRect().height ?? 0;
-                    resizeStartRef.current = {y: event.clientY, videoHeight, totalHeight: videoHeight + timelineHeight};
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    event.preventDefault();
-                }} onPointerMove={event => {
-                    const start = resizeStartRef.current;
-                    if (start && start.totalHeight > minVideoHeight + minTimelineHeight) setVideoFraction(clampVideoHeight(start.videoHeight + event.clientY - start.y, start.totalHeight) / start.totalHeight);
-                }} onPointerUp={stopPanelResize} onPointerCancel={stopPanelResize} onKeyDown={event => {
-                    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                        resizePanelsBy(event.key === 'ArrowDown' ? 20 : -20);
-                        event.preventDefault();
-                    }
-                }}><span className="h-1 w-12 rounded-full bg-[#354055] transition-colors group-hover:bg-primary group-focus-visible:bg-primary"/></div>
-                <div ref={timelinePanelRef} className="min-h-0"><Timeline videoFile={videoFile} captions={captionsReady ? project.captions : []} activeCaptionId={activeCaption?.id ?? ''} currentTime={playbackTime} videoDuration={videoDuration} onSeek={seekTo} onCaptionSelect={(id) => {const caption = project.captions.find(item => item.id === id); if (caption) seekTo(caption.start)}} language={language}/></div>
-            </section>
+
+            {activeNav === 'Create' && (
+                <>
+                    <WorkflowPanel project={project} styles={styles} captionsReady={captionsReady} isGenerating={isGenerating} language={language} onVideoSelect={selectVideo} onGenerate={generateCaptions} onStyleSelect={(selectedStyle) => setProject((current) => ({...current, selectedStyle}))}/>
+                    <section className="workspace-grid grid min-h-0 min-w-0 overflow-hidden bg-[#0d121b] p-[18px] max-[1320px]:px-3" style={{'--video-flex': `${videoFraction}fr`, '--timeline-flex': `${1 - videoFraction}fr`} as CSSProperties} aria-label={copy.app.workspace}>
+                        <header className="flex items-center justify-between px-1 text-xs text-[#7f899b]"><div className="flex min-w-0 items-center gap-2"><span className="size-[7px] rounded-full bg-[#41b882] shadow-[0_0_0_3px_rgba(65,184,130,.09)]" aria-hidden="true"/><span className="overflow-hidden text-ellipsis whitespace-nowrap">{project.videoName ?? copy.app.untitled}</span></div><p className="m-0">{copy.app.tagline}</p></header>
+                        <div ref={videoPanelRef} className="min-h-0"><VideoPreview videoUrl={project.videoUrl} captionStyle={project.selectedStyle.id} activeCaption={activeCaption} playbackTime={playbackTime} videoDuration={videoDuration} onPlaybackTimeChange={setPlaybackTime} onDurationChange={setVideoDuration} seekRequest={seekRequest} onSeek={seekTo} language={language}/></div>
+                        <div role="separator" tabIndex={0} aria-label={copy.app.resizePanels} aria-orientation="horizontal" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(videoFraction * 100)} className="group flex cursor-row-resize touch-none items-center justify-center focus-visible:outline-2 focus-visible:outline-highlight" onPointerDown={event => {
+                            const videoHeight = videoPanelRef.current?.getBoundingClientRect().height ?? 0;
+                            const timelineHeight = timelinePanelRef.current?.getBoundingClientRect().height ?? 0;
+                            resizeStartRef.current = {y: event.clientY, videoHeight, totalHeight: videoHeight + timelineHeight};
+                            event.currentTarget.setPointerCapture(event.pointerId);
+                            event.preventDefault();
+                        }} onPointerMove={event => {
+                            const start = resizeStartRef.current;
+                            if (start && start.totalHeight > minVideoHeight + minTimelineHeight) setVideoFraction(clampVideoHeight(start.videoHeight + event.clientY - start.y, start.totalHeight) / start.totalHeight);
+                        }} onPointerUp={stopPanelResize} onPointerCancel={stopPanelResize} onKeyDown={event => {
+                            if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                                resizePanelsBy(event.key === 'ArrowDown' ? 20 : -20);
+                                event.preventDefault();
+                            }
+                        }}><span className="h-1 w-12 rounded-full bg-[#354055] transition-colors group-hover:bg-primary group-focus-visible:bg-primary"/></div>
+                        <div ref={timelinePanelRef} className="min-h-0"><Timeline videoFile={videoFile} captions={captionsReady ? project.captions : []} activeCaptionId={activeCaption?.id ?? ''} currentTime={playbackTime} videoDuration={videoDuration} onSeek={seekTo} onCaptionSelect={(id) => {const caption = project.captions.find(item => item.id === id); if (caption) seekTo(caption.start)}} language={language}/></div>
+                    </section>
+                </>
+            )}
+
+            {activeNav === 'Styles' && (
+                <StylesView
+                    project={project}
+                    onSelectStyle={(selectedStyle) => setProject((current) => ({...current, selectedStyle}))}
+                    language={language}
+                    onNavigateToCreate={() => setActiveNav('Create')}
+                />
+            )}
+
+            {activeNav === 'Templates' && (
+                <TemplatesView
+                    language={language}
+                    onApplyTemplate={(selectedStyle) => {
+                        setProject((current) => ({...current, selectedStyle}));
+                        setActiveNav('Create');
+                    }}
+                />
+            )}
+
+            {activeNav === 'Export' && (
+                <ExportView
+                    project={project}
+                    language={language}
+                    onBackToEdit={() => setActiveNav('Create')}
+                />
+            )}
+
+            {activeNav === 'Settings' && (
+                <SettingsView
+                    language={language}
+                    appConfig={appConfig}
+                    onLanguageChange={handleLanguageChange}
+                />
+            )}
         </main></AppFrame>
     );
 }

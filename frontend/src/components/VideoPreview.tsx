@@ -11,6 +11,10 @@ const captionStyleClass: Record<string, string> = {
  karaoke: 'bg-[#f1df3c] text-[#1b1821] text-[clamp(21px,2.1vw,36px)] font-extrabold',
  minimal: 'bottom-[7%] bg-[rgba(9,12,18,.7)] text-white text-[clamp(18px,1.8vw,28px)] font-semibold',
  pop: '-rotate-1 bg-[#f04b89] text-white text-[clamp(21px,2.1vw,36px)] font-extrabold',
+ cyber: 'bg-black/80 text-[#00f2fe] text-[clamp(22px,2.2vw,38px)] font-extrabold uppercase tracking-widest [text-shadow:0_0_12px_#00f2fe]',
+ boxed: 'bg-black/75 px-3 py-1.5 rounded-lg text-white text-[clamp(18px,1.8vw,28px)] font-bold',
+ cinematic: 'italic font-serif text-[#f5ecd7] text-[clamp(20px,2vw,32px)] [text-shadow:0_2px_8px_rgba(0,0,0,0.8)]',
+ typewriter: 'font-mono text-emerald-400 bg-black/60 text-[clamp(17px,1.7vw,26px)]',
 };
 export function VideoPreview({videoUrl,captionStyle,activeCaption,playbackTime,videoDuration,seekRequest,onPlaybackTimeChange,onDurationChange,onSeek,language}:Props){
  const copy=getCopy(language).preview;
