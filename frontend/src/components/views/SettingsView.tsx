@@ -1,7 +1,10 @@
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {CheckIcon, CpuIcon, KeyboardIcon, RefreshIcon, SettingsIcon, ShieldCheckIcon, TrashIcon, SparkleIcon} from '../Icons';
-import {getCopy, type Language} from '../../i18n';
+import {getCopy, getModelCopy, type Language} from '../../i18n';
 import type {config} from '../../../wailsjs/go/models';
+import type {models} from '../../../wailsjs/go/models';
+import {CancelModelDownload, DeleteModel, DownloadModel, ListModels, SelectModel} from '../../../wailsjs/go/main/App';
+import {EventsOn} from '../../../wailsjs/runtime/runtime';
 
 interface Props {
     language: Language;
@@ -13,17 +16,33 @@ type TabType = 'general' | 'ai' | 'storage' | 'shortcuts' | 'about';
 
 export function SettingsView({language, appConfig, onLanguageChange}: Props) {
     const copy = getCopy(language).settingsView;
+    const localizedModels = getModelCopy(language);
     const [activeTab, setActiveTab] = useState<TabType>('general');
     const [theme, setTheme] = useState<'dark' | 'black' | 'slate'>('dark');
     const [hardwareAcc, setHardwareAcc] = useState(true);
     const [autoSave, setAutoSave] = useState(true);
-    const [selectedModel, setSelectedModel] = useState<'base' | 'small' | 'medium'>('small');
+    const [localModels, setLocalModels] = useState<models.Info[]>([]);
+    const [modelError, setModelError] = useState('');
     const [computeDevice, setComputeDevice] = useState<'gpu' | 'cpu'>('gpu');
     const [wordTimestamps, setWordTimestamps] = useState(true);
     const [cacheCleared, setCacheCleared] = useState(false);
     const [cacheSize, setCacheSize] = useState('1.24 GB');
     const [checkingUpdates, setCheckingUpdates] = useState(false);
     const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+
+    const refreshModels = () => ListModels().then(setLocalModels).catch(error => setModelError(String(error)));
+    useEffect(() => {
+        void refreshModels();
+        const refresh = () => {void refreshModels()};
+        const cleanups = ['model:download:completed', 'model:download:error', 'model:download:canceled'].map(event => EventsOn(event, refresh));
+        return () => cleanups.forEach(cleanup => cleanup());
+    }, []);
+    const handleModelAction = async (model: models.Info) => {
+        setModelError('');
+        try { if (model.status === 'installed') await SelectModel(model.id); else if (model.status === 'downloading') await CancelModelDownload(model.id); else await DownloadModel(model.id); await refreshModels(); }
+        catch (error) { setModelError(String(error)); }
+    };
+    const handleModelDelete = async (id: string) => { try { await DeleteModel(id); await refreshModels(); } catch (error) { setModelError(String(error)); } };
 
     const handleClearCache = () => {
         setCacheSize('0 MB');
@@ -194,16 +213,12 @@ export function SettingsView({language, appConfig, onLanguageChange}: Props) {
                         <div className="rounded-2xl border border-[#222c3e] bg-[#121825] p-5">
                             <h2 className="text-sm font-bold text-white mb-3">{copy.localModel}</h2>
                             <div className="space-y-3">
-                                {[
-                                    {id: 'base', name: 'Whisper Base', size: '142 MB', desc: 'Ultra-fast transcription. Recommended for quick reels.', status: 'installed'},
-                                    {id: 'small', name: 'Whisper Small (Recommended)', size: '461 MB', desc: 'Best balance between speed and precision on social audio.', status: 'active'},
-                                    {id: 'medium', name: 'Whisper Medium', size: '1.5 GB', desc: 'Highest accuracy for technical words and background noise.', status: 'ready'},
-                                ].map(model => {
-                                    const isSelected = selectedModel === model.id;
+                                {localModels.map(model => {
+                                    const isSelected = model.selected;
+                                    const localized = localizedModels[model.id as keyof Pick<typeof localizedModels, 'base' | 'small' | 'medium'>];
                                     return (
                                         <div
                                             key={model.id}
-                                            onClick={() => setSelectedModel(model.id as any)}
                                             className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition-all ${
                                                 isSelected
                                                     ? 'border-primary bg-primary/10'
@@ -212,27 +227,27 @@ export function SettingsView({language, appConfig, onLanguageChange}: Props) {
                                         >
                                             <div>
                                                 <div className="flex items-center gap-2">
-                                                    <strong className="text-xs font-bold text-white">{model.name}</strong>
-                                                    <span className="rounded bg-[#1e2739] px-2 py-0.5 text-[10px] font-mono text-muted">{model.size}</span>
+                                                    <strong className="text-xs font-bold text-white">{localized?.name ?? model.name}</strong>
+                                                    <span className="rounded bg-[#1e2739] px-2 py-0.5 text-[10px] text-muted">{model.displaySize}</span>
+                                                    {model.recommended && <span className="rounded bg-primary/20 px-2 py-0.5 text-[10px] font-bold text-[#c5beff]">{localizedModels.recommended}</span>}
                                                 </div>
-                                                <p className="mt-1 text-[11px] text-[#8898ae]">{model.desc}</p>
+                                                <p className="mt-1 text-[11px] text-[#8898ae]">{localized?.description ?? model.description}</p>
                                             </div>
 
                                             <div>
-                                                {model.id === selectedModel ? (
+                                                {isSelected ? (
                                                     <span className="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
                                                         {copy.activeBadge}
                                                     </span>
                                                 ) : (
-                                                    <span className="rounded-full bg-[#1e2739] px-2.5 py-1 text-[10px] font-bold text-[#8a99ad]">
-                                                        {model.status === 'ready' ? copy.downloadAction : copy.installedBadge}
-                                                    </span>
+                                                    <div className="flex gap-2"><button onClick={() => void handleModelAction(model)} className="cursor-pointer rounded-full bg-[#1e2739] px-2.5 py-1 text-[10px] font-bold text-[#b6c2d3] hover:text-white">{model.status === 'installed' ? localizedModels.select : model.status === 'downloading' ? localizedModels.cancel : copy.downloadAction}</button>{model.status === 'installed' && <button onClick={() => void handleModelDelete(model.id)} className="cursor-pointer rounded-full bg-red-500/10 px-2.5 py-1 text-[10px] font-bold text-red-300">{localizedModels.delete}</button>}</div>
                                                 )}
                                             </div>
                                         </div>
                                     );
                                 })}
                             </div>
+                            {modelError && <p className="mt-3 text-xs text-red-300">{modelError}</p>}
                         </div>
 
                         {/* Compute Device */}

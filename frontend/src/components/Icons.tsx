@@ -29,3 +29,4 @@ export const ShieldCheckIcon = (p: IconProps) => <Icon {...p}><path d="M12 22s8-
 export const PlayCircleIcon = (p: IconProps) => <Icon {...p}><circle cx="12" cy="12" r="10"/><polygon fill="currentColor" stroke="none" points="10 8 16 12 10 16 10 8"/></Icon>;
 export const CloseIcon = (p: IconProps) => <Icon {...p}><path d="M18 6 6 18M6 6l12 12"/></Icon>;
 export const LayersIcon = (p: IconProps) => <Icon {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></Icon>;
+export const AudioWaveIcon = (p: IconProps) => <Icon {...p}><path d="M2 10v4M6 6v12M10 3v18M14 8v8M18 5v14M22 10v4"/></Icon>;

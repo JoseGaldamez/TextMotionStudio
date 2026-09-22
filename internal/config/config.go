@@ -12,8 +12,8 @@ const fileName = "config.json"
 
 // AppConfig is the small, persistent state shared by onboarding and future settings.
 type AppConfig struct {
-	OnboardingCompleted bool `json:"onboardingCompleted"`
-	ModelInstalled      bool `json:"modelInstalled"`
+	OnboardingCompleted bool   `json:"onboardingCompleted"`
+	SelectedModel       string `json:"selectedModel,omitempty"`
 	Language            string `json:"language"`
 }
 
@@ -24,12 +24,20 @@ func normalizeLanguage(language string) string {
 	return "en"
 }
 
-func path() (string, error) {
+func Directory() (string, error) {
 	directory, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(directory, appDirectory, fileName), nil
+	return filepath.Join(directory, appDirectory), nil
+}
+
+func path() (string, error) {
+	directory, err := Directory()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(directory, fileName), nil
 }
 
 // Load returns the first-run defaults when no configuration file exists.

@@ -3,13 +3,13 @@ import type {CaptionStyle, VideoProject} from '../models';
 import {CheckIcon, ChevronIcon, ExportIcon, SparkleIcon, VideoIcon} from './Icons';
 import {getCopy, type Language} from '../i18n';
 
-interface Props {project: VideoProject; styles: CaptionStyle[]; captionsReady: boolean; isGenerating: boolean; language: Language; onVideoSelect: (file: File) => void; onGenerate: () => void; onStyleSelect: (style: CaptionStyle) => void;}
+interface Props {project: VideoProject; styles: CaptionStyle[]; captionsReady: boolean; isGenerating: boolean; language: Language; onVideoSelect: (file: File) => void; onGenerate: () => void; onStyleSelect: (style: CaptionStyle) => void; onCaptionSizeChange: (size: number) => void; onCaptionPositionChange: (position: number) => void;}
 
 const stepClass = 'relative mb-[29px] [@media(max-height:820px)]:mb-5';
 const headingClass = 'mb-[14px] text-[18px] tracking-[-.02em] [&_span]:text-[#c7ced9]';
 const buttonClass = 'mt-3 flex h-[52px] w-full cursor-pointer items-center justify-center gap-[10px] rounded-[10px] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#958aff]';
 
-export function WorkflowPanel({project, styles, captionsReady, isGenerating, language, onVideoSelect, onGenerate, onStyleSelect}: Props) {
+export function WorkflowPanel({project, styles, captionsReady, isGenerating, language, onVideoSelect, onGenerate, onStyleSelect, onCaptionSizeChange, onCaptionPositionChange}: Props) {
     const copy = getCopy(language).workflow;
     const styleCopy = getCopy(language).styles;
     const selectedStyleIndex = styles.findIndex(style => style.id === project.selectedStyle.id);
@@ -42,6 +42,16 @@ export function WorkflowPanel({project, styles, captionsReady, isGenerating, lan
                 <ChevronIcon className={`w-[17px] text-[#9ba6b8] transition-transform duration-200 ${stylesOpen ? 'rotate-90' : ''}`}/>
             </button>
             {stylesOpen && <div className="absolute top-[105px] right-0 left-0 z-5 rounded-[11px] border border-[#30394a] bg-surface p-[7px] shadow-[0_16px_36px_rgba(0,0,0,.38)]">{styles.map((style, index) => <button key={style.id} onClick={() => {onStyleSelect(style); setStylesOpen(false)}} className={`flex h-[38px] w-full cursor-pointer items-center justify-between rounded-[7px] px-[10px] text-[#c9d0dc] hover:bg-[#272f42] hover:text-white [&_svg]:w-4 [&_svg]:text-[#8b7fff] ${project.selectedStyle.id === style.id ? 'bg-[#272f42] text-white' : ''}`}><span>{styleCopy[index]?.name ?? style.name}</span>{project.selectedStyle.id === style.id && <CheckIcon/>}</button>)}</div>}
+            <div className="mt-5">
+                <div className="flex items-center justify-between gap-3"><label htmlFor="caption-size" className="text-xs font-semibold text-[#c7ced9]">{copy.captionSize}</label><output htmlFor="caption-size" className="text-xs font-bold tabular-nums text-white">{project.captionSize}%</output></div>
+                <input id="caption-size" type="range" min="25" max="200" step="5" value={project.captionSize} onChange={event => onCaptionSizeChange(Number(event.target.value))} className="seek mt-3 h-2 w-full cursor-pointer rounded-full bg-[#30394a] accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#958aff]"/>
+                <div className="mt-1 flex items-center justify-between gap-2"><span className="text-[11px] text-muted">{copy.captionSizeHint}</span><button type="button" onClick={() => onCaptionSizeChange(100)} disabled={project.captionSize === 100} className="cursor-pointer text-[11px] font-semibold text-[#bcb5ff] hover:text-white disabled:cursor-default disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#958aff]">{copy.resetSize}</button></div>
+            </div>
+            <div className="mt-4 border-t border-[#273143] pt-4">
+                <div className="flex items-center justify-between gap-3"><label htmlFor="caption-position" className="text-xs font-semibold text-[#c7ced9]">{copy.captionPosition}</label><output htmlFor="caption-position" className="text-xs font-bold tabular-nums text-white">{project.captionPosition}%</output></div>
+                <input id="caption-position" type="range" min="0" max="100" step="1" value={project.captionPosition} onChange={event => onCaptionPositionChange(Number(event.target.value))} className="seek mt-3 h-2 w-full cursor-pointer rounded-full bg-[#30394a] accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#958aff]"/>
+                <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-muted"><span>{copy.positionOriginal}</span><button type="button" onClick={() => onCaptionPositionChange(0)} disabled={project.captionPosition === 0} className="cursor-pointer font-semibold text-[#bcb5ff] hover:text-white disabled:cursor-default disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#958aff]">{copy.resetSize}</button><span>{copy.positionTop}</span></div>
+            </div>
         </section>
         <section>
             <h2 className={headingClass}><span>4</span> {copy.export}</h2>

@@ -48,7 +48,7 @@ function App() {
     const [configError, setConfigError] = useState('');
     const [loadAttempt, setLoadAttempt] = useState(0);
     const [activeNav, setActiveNav] = useState('Create');
-    const [project, setProject] = useState<VideoProject>({videoName: null, videoUrl: null, captions: mockCaptions, selectedStyle: styles[0]});
+    const [project, setProject] = useState<VideoProject>({videoName: null, videoUrl: null, captions: mockCaptions, selectedStyle: styles[0], captionSize: 100, captionPosition: 0});
     const [isGenerating, setIsGenerating] = useState(false);
     const [captionsReady, setCaptionsReady] = useState(false);
     const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -83,7 +83,7 @@ function App() {
     }, [project.videoUrl]);
 
     const selectVideo = (file: File) => {
-        if (!file.type.startsWith('video/')) return;
+        if (!file.type.startsWith('video/') && !/\.(mp4|mov|mkv|avi|webm|m4v)$/i.test(file.name)) return;
         const url = URL.createObjectURL(file);
         setVideoFile(file);
         setCaptionsReady(false);
@@ -123,7 +123,7 @@ function App() {
     const handleLanguageChange = async (newLang: Language) => {
         if (!appConfig) return;
         try {
-            const updated = await UpdateAppConfig(appConfig.onboardingCompleted, appConfig.modelInstalled, newLang);
+            const updated = await UpdateAppConfig(appConfig.onboardingCompleted, newLang);
             setAppConfig(updated);
         } catch (err) {
             console.error('Failed to update language', err);
@@ -134,8 +134,8 @@ function App() {
         {configError ? <div className="text-center"><p className="mb-5 text-sm text-muted" role="alert">{configError}</p><button className="cursor-pointer rounded-[10px] bg-primary px-5 py-3 text-sm font-bold hover:bg-primary-hover" onClick={() => {setConfigError(''); setLoadAttempt(attempt => attempt + 1)}}>{copy.app.retry}</button></div> : <p className="text-sm text-muted">{copy.app.loading}</p>}
     </main></AppFrame>;
 
-    if (!appConfig.onboardingCompleted) return <AppFrame><Onboarding onComplete={async (modelInstalled, selectedLanguage) => {
-        const value = await UpdateAppConfig(true, modelInstalled, selectedLanguage);
+    if (!appConfig.onboardingCompleted) return <AppFrame><Onboarding onComplete={async (selectedLanguage) => {
+        const value = await UpdateAppConfig(true, selectedLanguage);
         setAppConfig(value);
     }}/></AppFrame>;
 
@@ -149,10 +149,10 @@ function App() {
 
             {activeNav === 'Create' && (
                 <>
-                    <WorkflowPanel project={project} styles={styles} captionsReady={captionsReady} isGenerating={isGenerating} language={language} onVideoSelect={selectVideo} onGenerate={generateCaptions} onStyleSelect={(selectedStyle) => setProject((current) => ({...current, selectedStyle}))}/>
+                    <WorkflowPanel project={project} styles={styles} captionsReady={captionsReady} isGenerating={isGenerating} language={language} onVideoSelect={selectVideo} onGenerate={generateCaptions} onStyleSelect={(selectedStyle) => setProject((current) => ({...current, selectedStyle}))} onCaptionSizeChange={(captionSize) => setProject((current) => ({...current, captionSize}))} onCaptionPositionChange={(captionPosition) => setProject((current) => ({...current, captionPosition}))}/>
                     <section className="workspace-grid grid min-h-0 min-w-0 overflow-hidden bg-[#0d121b] p-[18px] max-[1320px]:px-3" style={{'--video-flex': `${videoFraction}fr`, '--timeline-flex': `${1 - videoFraction}fr`} as CSSProperties} aria-label={copy.app.workspace}>
                         <header className="flex items-center justify-between px-1 text-xs text-[#7f899b]"><div className="flex min-w-0 items-center gap-2"><span className="size-[7px] rounded-full bg-[#41b882] shadow-[0_0_0_3px_rgba(65,184,130,.09)]" aria-hidden="true"/><span className="overflow-hidden text-ellipsis whitespace-nowrap">{project.videoName ?? copy.app.untitled}</span></div><p className="m-0">{copy.app.tagline}</p></header>
-                        <div ref={videoPanelRef} className="min-h-0"><VideoPreview videoUrl={project.videoUrl} captionStyle={project.selectedStyle.id} activeCaption={activeCaption} playbackTime={playbackTime} videoDuration={videoDuration} onPlaybackTimeChange={setPlaybackTime} onDurationChange={setVideoDuration} seekRequest={seekRequest} onSeek={seekTo} language={language}/></div>
+                        <div ref={videoPanelRef} className="min-h-0"><VideoPreview videoUrl={project.videoUrl} captionStyle={project.selectedStyle.id} captionSize={project.captionSize} captionPosition={project.captionPosition} activeCaption={activeCaption} playbackTime={playbackTime} videoDuration={videoDuration} onPlaybackTimeChange={setPlaybackTime} onDurationChange={setVideoDuration} seekRequest={seekRequest} onSeek={seekTo} onVideoSelect={selectVideo} language={language}/></div>
                         <div role="separator" tabIndex={0} aria-label={copy.app.resizePanels} aria-orientation="horizontal" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(videoFraction * 100)} className="group flex cursor-row-resize touch-none items-center justify-center focus-visible:outline-2 focus-visible:outline-highlight" onPointerDown={event => {
                             const videoHeight = videoPanelRef.current?.getBoundingClientRect().height ?? 0;
                             const timelineHeight = timelinePanelRef.current?.getBoundingClientRect().height ?? 0;

@@ -1,13 +1,13 @@
 import {useEffect, useState} from 'react';
-import {BoltIcon, CheckIcon, ChevronIcon, ExportIcon, SparkleIcon, VideoIcon} from '../Icons';
+import {AudioWaveIcon, BoltIcon, CheckIcon, ChevronIcon, ExportIcon, SparkleIcon, VideoIcon} from '../Icons';
 import logotype from '../../assets/images/textmotion-logotipo.png';
-import {modelDetails, startModelDownload, type ModelStatus} from './modelDownload';
-import {getCopy, type Language} from '../../i18n';
+import {cancelDownload, downloadModel, listModels, selectModel, subscribeToModelDownloads, type DownloadProgress, type ModelInfo, type ModelStatus} from './modelDownload';
+import {getCopy, getModelCopy, type Language} from '../../i18n';
 
 type Step = 'welcome' | 'tour' | 'setup' | 'download' | 'ready';
 
 interface Props {
-    onComplete: (modelInstalled: boolean, language: Language) => Promise<void>;
+    onComplete: (language: Language) => Promise<void>;
 }
 
 const primaryButton = 'inline-flex min-h-[48px] cursor-pointer items-center justify-center gap-2 rounded-[10px] bg-primary px-6 text-sm font-bold text-white transition-colors hover:bg-primary-hover disabled:cursor-wait disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-highlight';
@@ -28,42 +28,54 @@ function TourVisual({index, language}: {index: number; language: Language}) {
     </div>;
 }
 
-function DownloadProgress({onComplete, language}: {onComplete: () => void; language: Language}) {
-    const [percent, setPercent] = useState(0);
+function DownloadProgress({model, onComplete, onError, onCancel, language}: {model: ModelInfo; onComplete: () => void; onError: (message: string) => void; onCancel: () => void; language: Language}) {
+    const [progress, setProgress] = useState<DownloadProgress>({modelId: model.id, bytesDownloaded: 0, totalBytes: model.sizeBytes, percentage: 0});
     const copy = getCopy(language).onboarding;
-    useEffect(() => startModelDownload(setPercent, onComplete), [onComplete]);
-    const downloaded = Math.round(modelDetails.sizeMB * percent / 100);
+    const localizedModels = getModelCopy(language);
+    useEffect(() => {
+        const unsubscribe = subscribeToModelDownloads({progress: value => {if (value.modelId === model.id) setProgress(value)}, completed: value => {if (value.modelId === model.id) onComplete()}, error: value => {if (value.modelId === model.id) onError(value.message)}, canceled: value => {if (value.modelId === model.id) onCancel()}});
+        void downloadModel(model.id).catch(error => onError(String(error)));
+        return unsubscribe;
+    }, [model.id]);
+    const percent = Math.min(100, Math.round(progress.percentage));
+    const formatMiB = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
     return <div className="mx-auto w-full max-w-[560px]">
-        <div className="mb-8 grid size-16 place-items-center rounded-2xl bg-primary/15 text-highlight"><SparkleIcon className="size-8"/></div>
-        <h2 className="text-[32px] font-bold tracking-[-.03em]">{copy.downloading}</h2>
-        <p className="mt-3 text-sm text-muted">{copy.settingUp.replace('{model}', modelDetails.name)}</p>
-        <div className="mt-12 flex items-end justify-between"><span className="text-sm text-muted">{downloaded} MB / {modelDetails.sizeMB} MB</span><strong className="text-2xl">{percent}%</strong></div>
+        <div className="mb-8 grid size-16 place-items-center rounded-2xl bg-primary/15 text-highlight"><AudioWaveIcon className="size-8"/></div>
+        <h2 className="text-[32px] font-bold tracking-[-.03em]">{progress.validating ? 'Validating…' : copy.downloading}</h2>
+        <p className="mt-3 text-sm text-muted">{copy.settingUp.replace('{model}', localizedModels[model.id as keyof Pick<typeof localizedModels, 'base' | 'small' | 'medium'>]?.name ?? model.name)}</p>
+        <div className="mt-12 flex items-end justify-between"><span className="text-sm text-muted">{formatMiB(progress.bytesDownloaded)} / {formatMiB(progress.totalBytes)}</span><strong className="text-2xl">{percent}%</strong></div>
         <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#30394a]" role="progressbar" aria-label={copy.downloadProgress} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><div className="h-full rounded-full bg-primary transition-[width] duration-100" style={{width: `${percent}%`}}/></div>
-        <p className="mt-5 text-xs text-muted">{copy.keepOpen}</p>
+        <div className="mt-5 flex items-center justify-between"><p className="text-xs text-muted">{copy.keepOpen}{progress.bytesPerSecond ? ` · ${formatMiB(progress.bytesPerSecond)}/s` : ''}</p><button className="cursor-pointer text-xs text-muted hover:text-white" onClick={() => cancelDownload(model.id)}>{localizedModels.cancel}</button></div>
     </div>;
 }
 
 export function Onboarding({onComplete}: Props) {
     const [language, setLanguage] = useState<Language>('en');
     const copy = getCopy(language).onboarding;
+    const localizedModels = getModelCopy(language);
     const [step, setStep] = useState<Step>('welcome');
     const [tourIndex, setTourIndex] = useState(0);
     const [modelStatus, setModelStatus] = useState<ModelStatus>('not-installed');
+    const [models, setModels] = useState<ModelInfo[]>([]);
+    const [selectedModelID, setSelectedModelID] = useState('small');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
-    const finish = async (installed: boolean) => {
+    useEffect(() => {void listModels().then(values => {setModels(values); const selected = values.find(model => model.selected); if (selected) setSelectedModelID(selected.id)}).catch(() => setError('Could not load transcription models.'))}, []);
+
+    const finish = async () => {
         setSaving(true);
         setError('');
         try {
-            await onComplete(installed, language);
+            await onComplete(language);
         } catch {
             setError(copy.saveError);
         } finally {
             setSaving(false);
         }
     };
-    const downloadComplete = () => {setModelStatus('installed'); setStep('ready')};
+    const selectedModel = models.find(model => model.id === selectedModelID);
+    const downloadComplete = async () => {try {await selectModel(selectedModelID); setModelStatus('installed'); setStep('ready')} catch (reason) {setModelStatus('error'); setError(String(reason))}};
 
     return <main className="flex h-full min-w-[1280px] items-center justify-center overflow-y-auto bg-background px-12 py-10 text-foreground [@media(max-height:820px)]:items-start [@media(max-height:820px)]:py-4">
         <div className="w-full max-w-[780px] overflow-hidden rounded-2xl border border-border bg-secondary shadow-[0_24px_70px_rgba(0,0,0,.22)]">
@@ -94,21 +106,54 @@ export function Onboarding({onComplete}: Props) {
                 </div>}
 
                 {step === 'setup' && <div className="mx-auto w-full max-w-[560px]">
-                    <div className="mb-7 grid size-16 place-items-center rounded-2xl bg-primary/15 text-highlight"><SparkleIcon className="size-8"/></div>
+                    <div className="mb-7 grid size-16 place-items-center rounded-2xl bg-primary/15 text-highlight"><AudioWaveIcon className="size-8"/></div>
                     <h2 className="text-[32px] font-bold tracking-[-.03em]">{copy.setupTitle}</h2>
-                    <p className="mt-3 max-w-[500px] text-sm leading-relaxed text-muted">{copy.setupDescription}</p>
+                    <p className="mt-3 max-w-[540px] text-sm leading-relaxed text-muted">
+                        {copy.setupDescription}{' '}
+                        <strong className="inline-block font-bold text-[#d8d2ff] bg-primary/20 px-2 py-0.5 rounded-lg border border-primary/35 shadow-xs">
+                            {copy.setupOnce}
+                        </strong>
+                    </p>
                     <div className="mt-7 grid grid-cols-3 gap-3">{copy.benefits.map(benefit => <div key={benefit} className="flex items-start gap-2 rounded-xl bg-surface p-3 text-xs leading-snug"><CheckIcon className="size-4 shrink-0 text-highlight"/>{benefit}</div>)}</div>
-                    <div className="mt-8 flex justify-between rounded-xl border border-border bg-[#101620] px-5 py-4 text-sm"><div><span className="block text-xs text-muted">{copy.recommendedModel}</span><strong className="mt-1 block">{modelDetails.name}</strong></div><div className="text-right"><span className="block text-xs text-muted">{copy.downloadSize}</span><strong className="mt-1 block">{modelDetails.displaySize}</strong></div></div>
-                    <div className="mt-9 flex gap-3"><button className={primaryButton} onClick={() => {setModelStatus('downloading'); setStep('download')}}>{copy.downloadModel}</button><button className={secondaryButton} onClick={() => finish(false)} disabled={saving}>{copy.setupLater}</button></div>
+                    <div className="mt-7 grid grid-cols-3 gap-3 items-stretch">{models.map(model => {
+                        const localized = localizedModels[model.id as keyof Pick<typeof localizedModels, 'base' | 'small' | 'medium'>];
+                        const isSelected = selectedModelID === model.id;
+                        return <button
+                            key={model.id}
+                            type="button"
+                            onClick={() => setSelectedModelID(model.id)}
+                            className={`flex flex-col justify-start h-full cursor-pointer rounded-xl border p-4 text-left transition-all ${
+                                isSelected ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(102,87,245,0.4)]' : 'border-border bg-[#101620] hover:border-[#566078]'
+                            }`}
+                        >
+                            <div className="flex min-h-[22px] items-center justify-between gap-1.5">
+                                <strong className="text-sm font-bold text-foreground">{localized?.name ?? model.name}</strong>
+                                {model.recommended && (
+                                    <span className="shrink-0 rounded-full bg-primary/25 px-2 py-0.5 text-[9px] font-bold text-[#c5beff]">
+                                        {localizedModels.recommended}
+                                    </span>
+                                )}
+                            </div>
+                            <span className="mt-1.5 block text-xs font-medium text-muted">{model.displaySize}</span>
+                            <p className="mt-3.5 text-[11px] leading-relaxed text-muted flex-1">{localized?.description ?? model.description}</p>
+                            <div className="mt-3 pt-1 text-[10px]">
+                                {model.recommended && <span className="block font-semibold text-[#bcb6ff]">{localizedModels.recommendedHint}</span>}
+                                {model.resourceNote && <span className="block text-muted">{localizedModels.resourceNote}</span>}
+                                {model.status === 'installed' && <span className="block font-bold text-[#83e1ae]">{localizedModels.installed}</span>}
+                            </div>
+                        </button>;
+                    })}</div>
+                    <div className="mt-9 flex gap-3"><button className={primaryButton} disabled={!selectedModel} onClick={() => {if (selectedModel?.status === 'installed') void downloadComplete(); else {setError(''); setModelStatus('downloading'); setStep('download')}}}>{selectedModel?.status === 'installed' ? localizedModels.useModel : copy.downloadModel}</button><button className={secondaryButton} onClick={finish} disabled={saving}>{copy.setupLater}</button></div>
                 </div>}
 
-                {step === 'download' && modelStatus === 'downloading' && <DownloadProgress onComplete={downloadComplete} language={language}/>}
+                {step === 'download' && modelStatus === 'downloading' && selectedModel && <DownloadProgress model={selectedModel} onComplete={() => void downloadComplete()} onError={message => {setModelStatus('error'); setError(message)}} onCancel={() => {setModelStatus('not-installed'); setStep('setup')}} language={language}/>}
+                {step === 'download' && modelStatus === 'error' && <div className="mx-auto max-w-[540px] text-center"><h2 className="text-2xl font-bold">Download interrupted</h2><p className="mt-4 text-sm text-[#ff9b9b]">{error}</p><div className="mt-8 flex justify-center gap-3"><button className={primaryButton} onClick={() => {setError('');setModelStatus('downloading')}}>Retry</button><button className={secondaryButton} onClick={() => {setError('');setModelStatus('not-installed');setStep('setup')}}>Back</button></div></div>}
 
                 {step === 'ready' && modelStatus === 'installed' && <div className="mx-auto max-w-[540px] text-center">
                     <div className="mx-auto mb-8 grid size-[72px] place-items-center rounded-full bg-[#26382f] text-[#83e1ae]"><CheckIcon className="size-9"/></div>
                     <h2 className="text-[38px] font-bold tracking-[-.035em]">{copy.readyTitle}</h2>
                     <p className="mt-4 text-base text-muted">{copy.readyDescription}</p>
-                    <button className={`${primaryButton} mt-10`} onClick={() => finish(true)} disabled={saving}>{copy.firstProject}</button>
+                    <button className={`${primaryButton} mt-10`} onClick={finish} disabled={saving}>{copy.firstProject}</button>
                 </div>}
                 {error && <p role="alert" className="mt-5 text-center text-sm text-[#ff9b9b]">{error}</p>}
             </div>
