@@ -1,10 +1,11 @@
-import {useEffect, useState} from 'react';
+import {useRef, useState} from 'react';
+import {LoaderCircle} from 'lucide-react';
 import {CheckIcon, CpuIcon, KeyboardIcon, RefreshIcon, SettingsIcon, ShieldCheckIcon, TrashIcon, SparkleIcon} from '../Icons';
+import {ModelDownloadProgress} from '../ModelDownloadProgress';
 import {getCopy, getModelCopy, type Language} from '../../i18n';
 import type {config} from '../../../wailsjs/go/models';
-import type {models} from '../../../wailsjs/go/models';
-import {CancelModelDownload, DeleteModel, DownloadModel, ListModels, SelectModel} from '../../../wailsjs/go/main/App';
-import {EventsOn} from '../../../wailsjs/runtime/runtime';
+import {useLocalModels} from '../../useLocalModels';
+import type {ModelInfo} from '../onboarding/modelDownload';
 
 interface Props {
     language: Language;
@@ -21,8 +22,9 @@ export function SettingsView({language, appConfig, onLanguageChange}: Props) {
     const [theme, setTheme] = useState<'dark' | 'black' | 'slate'>('dark');
     const [hardwareAcc, setHardwareAcc] = useState(true);
     const [autoSave, setAutoSave] = useState(true);
-    const [localModels, setLocalModels] = useState<models.Info[]>([]);
-    const [modelError, setModelError] = useState('');
+    const {models: localModels, progressById: modelProgress, error: modelError, select, download, cancel, remove} = useLocalModels();
+    const [selectingModelId, setSelectingModelId] = useState<string | null>(null);
+    const selectionInProgress = useRef(false);
     const [computeDevice, setComputeDevice] = useState<'gpu' | 'cpu'>('gpu');
     const [wordTimestamps, setWordTimestamps] = useState(true);
     const [cacheCleared, setCacheCleared] = useState(false);
@@ -30,19 +32,22 @@ export function SettingsView({language, appConfig, onLanguageChange}: Props) {
     const [checkingUpdates, setCheckingUpdates] = useState(false);
     const [updateStatus, setUpdateStatus] = useState<string | null>(null);
 
-    const refreshModels = () => ListModels().then(setLocalModels).catch(error => setModelError(String(error)));
-    useEffect(() => {
-        void refreshModels();
-        const refresh = () => {void refreshModels()};
-        const cleanups = ['model:download:completed', 'model:download:error', 'model:download:canceled'].map(event => EventsOn(event, refresh));
-        return () => cleanups.forEach(cleanup => cleanup());
-    }, []);
-    const handleModelAction = async (model: models.Info) => {
-        setModelError('');
-        try { if (model.status === 'installed') await SelectModel(model.id); else if (model.status === 'downloading') await CancelModelDownload(model.id); else await DownloadModel(model.id); await refreshModels(); }
-        catch (error) { setModelError(String(error)); }
+    const handleModelAction = async (model: ModelInfo) => {
+        if (selectionInProgress.current) return;
+        if (model.status === 'installed') {
+            selectionInProgress.current = true;
+            setSelectingModelId(model.id);
+            try {
+                await select(model.id);
+            } finally {
+                selectionInProgress.current = false;
+                setSelectingModelId(null);
+            }
+            return;
+        }
+        else if (model.status === 'downloading') void cancel(model.id);
+        else void download(model.id);
     };
-    const handleModelDelete = async (id: string) => { try { await DeleteModel(id); await refreshModels(); } catch (error) { setModelError(String(error)); } };
 
     const handleClearCache = () => {
         setCacheSize('0 MB');
@@ -215,34 +220,39 @@ export function SettingsView({language, appConfig, onLanguageChange}: Props) {
                             <div className="space-y-3">
                                 {localModels.map(model => {
                                     const isSelected = model.selected;
+                                    const isSelecting = selectingModelId === model.id;
                                     const localized = localizedModels[model.id as keyof Pick<typeof localizedModels, 'base' | 'small' | 'medium'>];
                                     return (
                                         <div
                                             key={model.id}
-                                            className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition-all ${
+                                            className={`rounded-xl border p-4 transition-colors ${
                                                 isSelected
                                                     ? 'border-primary bg-primary/10'
                                                     : 'border-[#232c3f] bg-[#151d2c] hover:border-[#35435c]'
                                             }`}
                                         >
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <strong className="text-xs font-bold text-white">{localized?.name ?? model.name}</strong>
-                                                    <span className="rounded bg-[#1e2739] px-2 py-0.5 text-[10px] text-muted">{model.displaySize}</span>
-                                                    {model.recommended && <span className="rounded bg-primary/20 px-2 py-0.5 text-[10px] font-bold text-[#c5beff]">{localizedModels.recommended}</span>}
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div className="min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <strong className="text-xs font-bold text-white">{localized?.name ?? model.name}</strong>
+                                                        <span className="rounded bg-[#1e2739] px-2 py-0.5 text-[10px] text-muted">{model.displaySize}</span>
+                                                        {model.recommended && <span className="rounded bg-primary/20 px-2 py-0.5 text-[10px] font-bold text-[#c5beff]">{localizedModels.recommended}</span>}
+                                                    </div>
+                                                    <p className="mt-1 text-[11px] text-[#8898ae]">{localized?.description ?? model.description}</p>
                                                 </div>
-                                                <p className="mt-1 text-[11px] text-[#8898ae]">{localized?.description ?? model.description}</p>
-                                            </div>
 
-                                            <div>
-                                                {isSelected ? (
-                                                    <span className="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
-                                                        {copy.activeBadge}
-                                                    </span>
-                                                ) : (
-                                                    <div className="flex gap-2"><button onClick={() => void handleModelAction(model)} className="cursor-pointer rounded-full bg-[#1e2739] px-2.5 py-1 text-[10px] font-bold text-[#b6c2d3] hover:text-white">{model.status === 'installed' ? localizedModels.select : model.status === 'downloading' ? localizedModels.cancel : copy.downloadAction}</button>{model.status === 'installed' && <button onClick={() => void handleModelDelete(model.id)} className="cursor-pointer rounded-full bg-red-500/10 px-2.5 py-1 text-[10px] font-bold text-red-300">{localizedModels.delete}</button>}</div>
-                                                )}
+                                                <div className="shrink-0">
+                                                    {isSelected ? (
+                                                        <span className="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
+                                                            {copy.activeBadge}
+                                                        </span>
+                                                    ) : (
+                                                        <div className="flex gap-2"><button onClick={() => void handleModelAction(model)} disabled={selectingModelId !== null} aria-busy={isSelecting} className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full bg-[#1e2739] px-2.5 py-1 text-[10px] font-bold text-[#b6c2d3] hover:enabled:text-white disabled:cursor-wait disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-[#958aff]">{isSelecting && <LoaderCircle className="size-3 animate-spin" aria-hidden="true"/>}{isSelecting ? localizedModels.selecting : model.status === 'installed' ? localizedModels.select : model.status === 'downloading' ? localizedModels.cancel : copy.downloadAction}</button>{model.status === 'installed' && <button onClick={() => void remove(model.id)} disabled={selectingModelId !== null} className="cursor-pointer rounded-full bg-red-500/10 px-2.5 py-1 text-[10px] font-bold text-red-300 disabled:cursor-wait disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-[#958aff]">{localizedModels.delete}</button>}</div>
+                                                    )}
+                                                </div>
                                             </div>
+                                            {isSelecting && <span className="sr-only" role="status">{localizedModels.selecting}</span>}
+                                            {model.status === 'downloading' && <ModelDownloadProgress progress={modelProgress[model.id]} language={language}/>}
                                         </div>
                                     );
                                 })}

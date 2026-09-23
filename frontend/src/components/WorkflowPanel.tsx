@@ -1,10 +1,10 @@
 import {useEffect, useRef, useState} from 'react';
-import {RotateCcw} from 'lucide-react';
+import {LoaderCircle, RotateCcw} from 'lucide-react';
 import type {CaptionStyle, VideoProject} from '../models';
 import {CheckIcon, ChevronIcon, ExportIcon, SparkleIcon, VideoIcon} from './Icons';
 import {getCopy, type Language} from '../i18n';
 
-interface Props {project: VideoProject; styles: CaptionStyle[]; captionsReady: boolean; isGenerating: boolean; language: Language; onVideoSelect: (file: File) => void; onGenerate: () => void; onStyleSelect: (style: CaptionStyle) => void; onCaptionSizeChange: (size: number) => void; onCaptionPositionChange: (position: number) => void;}
+interface Props {project: VideoProject; styles: CaptionStyle[]; captionsReady: boolean; isGenerating: boolean; readyModelId: string | null; generationError: string; captionLanguage: string; language: Language; onChooseVideo: () => void; onVideoSelect: (file: File) => void; onGenerate: () => void; onCancel: () => void; onCaptionLanguageChange: (language: string) => void; onStyleSelect: (style: CaptionStyle) => void; onCaptionSizeChange: (size: number) => void; onCaptionPositionChange: (position: number) => void;}
 
 const stepClass = 'relative pb-[26px] mb-[26px] border-b border-[#21293a] [@media(max-height:820px)]:pb-[18px] [@media(max-height:820px)]:mb-[18px]';
 const headingClass = 'mb-[14px] flex items-center gap-2.5 text-[17px] font-bold tracking-[-.01em]';
@@ -68,14 +68,14 @@ function ResetButton({
     );
 }
 
-export function WorkflowPanel({project, styles, captionsReady, isGenerating, language, onVideoSelect, onGenerate, onStyleSelect, onCaptionSizeChange, onCaptionPositionChange}: Props) {
+export function WorkflowPanel({project, styles, captionsReady, isGenerating, readyModelId, generationError, captionLanguage, language, onChooseVideo, onVideoSelect, onGenerate, onCancel, onCaptionLanguageChange, onStyleSelect, onCaptionSizeChange, onCaptionPositionChange}: Props) {
     const copy = getCopy(language).workflow;
     const stylesById = (getCopy(language) as unknown as {stylesById?: Record<string, {name: string; description: string}>}).stylesById;
-    const inputRef = useRef<HTMLInputElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const [stylesOpen, setStylesOpen] = useState(false);
     const [dragging, setDragging] = useState(false);
-    const acceptFile = (files: FileList | null) => {const file = files?.[0]; if (file) onVideoSelect(file)};
+    const modelReady = Boolean(readyModelId);
+    const captionsForSelectedModel = captionsReady && project.transcription?.model === readyModelId;
 
     const hasVideo = Boolean(project.videoUrl);
     const step1Status: 'completed' | 'active' = hasVideo ? 'completed' : 'active';
@@ -104,8 +104,7 @@ export function WorkflowPanel({project, styles, captionsReady, isGenerating, lan
                 <StepBadge step={1} status={step1Status} />
                 <span>{copy.load}</span>
             </h2>
-            <button className={`flex h-[166px] w-full cursor-pointer flex-col items-center justify-center rounded-[13px] border bg-[#1a2130] text-[#dfe5ef] transition-[border,background,transform] duration-200 hover:-translate-y-px hover:border-[#7062fb] hover:bg-[#1d2536] [@media(max-height:820px)]:h-[135px] [&>svg]:mb-[15px] [&>svg]:size-[31px] ${dragging ? '-translate-y-px border-[#7062fb] bg-[#1d2536]' : project.videoUrl ? 'border-[#4b5b61]' : 'border-[#30394a]'}`} onClick={() => inputRef.current?.click()} onDragOver={e => {e.preventDefault(); setDragging(true)}} onDragLeave={() => setDragging(false)} onDrop={e => {e.preventDefault(); setDragging(false); acceptFile(e.dataTransfer.files)}}>
-                <input ref={inputRef} type="file" accept="video/*" hidden onChange={e => acceptFile(e.target.files)}/>
+            <button data-video-drop-target className={`flex h-[166px] w-full cursor-pointer flex-col items-center justify-center rounded-[13px] border bg-[#1a2130] text-[#dfe5ef] transition-[border,background,transform] duration-200 hover:-translate-y-px hover:border-[#7062fb] hover:bg-[#1d2536] [@media(max-height:820px)]:h-[135px] [&>svg]:mb-[15px] [&>svg]:size-[31px] ${dragging ? '-translate-y-px border-[#7062fb] bg-[#1d2536]' : project.videoUrl ? 'border-[#4b5b61]' : 'border-[#30394a]'}`} onClick={onChooseVideo} onDragOver={e => {e.preventDefault(); setDragging(true)}} onDragLeave={() => setDragging(false)} onDrop={e => {e.preventDefault(); setDragging(false); const file = e.dataTransfer.files[0]; if (file) onVideoSelect(file)}}>
                 {project.videoUrl ? <CheckIcon className="text-[#63d3a0]"/> : <VideoIcon className="text-[#dce3ed]"/>}
                 <strong className="max-w-[250px] overflow-hidden text-ellipsis whitespace-nowrap text-sm">{project.videoName ?? copy.drop}</strong>
                 <span className="mt-[5px] text-[13px] text-[#b5bfce]">{project.videoUrl ? copy.replace : copy.browse}</span>
@@ -119,11 +118,13 @@ export function WorkflowPanel({project, styles, captionsReady, isGenerating, lan
                 <StepBadge step={2} status={step2Status} />
                 <span>{copy.generate}</span>
             </h2>
+            {hasVideo && !modelReady && <p className="mb-3 text-[11px] text-[#aeb9ca]">{copy.modelRequired}</p>}
             <label className="block">
                 <span className="sr-only">{copy.captionLanguage}</span>
                 <select
                     className="h-[45px] w-full rounded-[10px] border border-[#30394a] bg-surface pr-[42px] pl-[15px] text-[#e7ebf2] outline-0 focus-visible:border-[#8074ff] focus-visible:ring-[3px] focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
-                    defaultValue="auto"
+                    value={captionLanguage}
+                    onChange={event => onCaptionLanguageChange(event.target.value)}
                     disabled={!hasVideo}
                 >
                     <option value="auto">{copy.autoDetect}</option>
@@ -133,18 +134,21 @@ export function WorkflowPanel({project, styles, captionsReady, isGenerating, lan
             </label>
             <button
                 className={`${buttonClass} ${
-                    !hasVideo
+                    !hasVideo || !modelReady
                         ? 'cursor-not-allowed border border-[#242e3f] bg-[#151c27] text-[#556377]'
-                        : captionsReady
+                        : captionsForSelectedModel && !isGenerating
                         ? 'cursor-pointer border border-emerald-500/30 bg-[#152820] text-[#7de3af] hover:bg-[#1b3429]'
                         : 'cursor-pointer border border-[#6b5dff]/50 bg-primary text-white hover:bg-primary-hover active:bg-[#5244e3]'
                 } ${isGenerating ? 'cursor-wait opacity-80' : ''}`}
                 onClick={onGenerate}
-                disabled={!hasVideo || isGenerating}
+                disabled={!hasVideo || !modelReady || isGenerating}
             >
-                {captionsReady ? <CheckIcon/> : <SparkleIcon/>}
-                {isGenerating ? copy.generating : captionsReady ? copy.generated : copy.generateButton}
+                {isGenerating ? <LoaderCircle className="size-5 animate-spin" aria-hidden="true"/> : captionsForSelectedModel ? <CheckIcon/> : <SparkleIcon/>}
+                {isGenerating ? copy.generating : captionsForSelectedModel ? copy.generated : copy.generateButton}
             </button>
+            {isGenerating && <button type="button" className="mt-2 w-full text-xs text-muted hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#958aff]" onClick={onCancel}>{copy.cancelGeneration}</button>}
+            {isGenerating && <span className="sr-only" role="status">{copy.generating}</span>}
+            {generationError && <p className="mt-2 text-xs text-red-300" role="alert">{generationError}</p>}
         </section>
 
         {/* Paso 3: Personaliza tus subtítulos (Solo activo si se generaron subtítulos) */}

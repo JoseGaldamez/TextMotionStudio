@@ -4,8 +4,10 @@ import {SearchIcon} from './Icons';
 import {getCopy, type Language} from '../i18n';
 
 interface Props {
+    videoUrl: string | null;
     videoFile: File | null;
     captions: Caption[];
+    isGenerating: boolean;
     activeCaptionId: string;
     currentTime: number;
     videoDuration: number;
@@ -17,7 +19,7 @@ interface Props {
 }
 
 interface AudioAnalysis {
-    file: File;
+    videoUrl: string;
     status: 'loading' | 'ready' | 'unavailable';
     waveform: number[];
     duration: number;
@@ -25,8 +27,6 @@ interface AudioAnalysis {
 
 const analysisCache = new Map<string, AudioAnalysis>();
 const zoomCache = new Map<string, number>();
-
-const getFileKey = (file: File) => `${file.name}_${file.size}_${file.lastModified}`;
 
 const formatTime = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 
@@ -245,9 +245,9 @@ function WaveformSkeleton({captionsCount, label}: {captionsCount: number; label:
     );
 }
 
-export function Timeline({videoFile, captions, activeCaptionId, currentTime, videoDuration, onSeek, onCaptionSelect, onTogglePlay, language}: Props) {
+export function Timeline({videoUrl, videoFile, captions, isGenerating, activeCaptionId, currentTime, videoDuration, onSeek, onCaptionSelect, onTogglePlay, language}: Props) {
     const copy = getCopy(language).timeline;
-    const fileKey = videoFile ? getFileKey(videoFile) : '';
+    const fileKey = videoUrl ?? '';
     const [showWaveform, setShowWaveform] = useState(true);
     const [zoom, setZoomState] = useState(() => (fileKey ? zoomCache.get(fileKey) ?? 0 : 0));
     const [analysis, setAnalysis] = useState<AudioAnalysis | null>(() => {
@@ -268,12 +268,12 @@ export function Timeline({videoFile, captions, activeCaptionId, currentTime, vid
     };
 
     useEffect(() => {
-        if (!videoFile) {
+        if (!videoUrl || !videoFile) {
             setAnalysis(null);
             return;
         }
 
-        const key = getFileKey(videoFile);
+        const key = videoUrl;
         const cached = analysisCache.get(key);
         if (cached && cached.status === 'ready') {
             setAnalysis(cached);
@@ -281,7 +281,7 @@ export function Timeline({videoFile, captions, activeCaptionId, currentTime, vid
         }
 
         let cancelled = false;
-        setAnalysis({file: videoFile, status: 'loading', waveform: [], duration: 0});
+        setAnalysis({videoUrl, status: 'loading', waveform: [], duration: 0});
         const analyze = async () => {
             let context: AudioContext | null = null;
             try {
@@ -291,7 +291,7 @@ export function Timeline({videoFile, captions, activeCaptionId, currentTime, vid
                 const audio = await context.decodeAudioData(data);
                 if (!cancelled) {
                     const ready: AudioAnalysis = {
-                        file: videoFile,
+                        videoUrl,
                         status: 'ready',
                         waveform: extractWaveform(audio),
                         duration: audio.duration,
@@ -306,7 +306,7 @@ export function Timeline({videoFile, captions, activeCaptionId, currentTime, vid
             } catch {
                 if (!cancelled) {
                     const unavailable: AudioAnalysis = {
-                        file: videoFile,
+                        videoUrl,
                         status: 'unavailable',
                         waveform: [],
                         duration: 0,
@@ -320,9 +320,9 @@ export function Timeline({videoFile, captions, activeCaptionId, currentTime, vid
         };
         void analyze();
         return () => {cancelled = true};
-    }, [videoFile]);
+    }, [videoUrl, videoFile]);
 
-    const currentAnalysis = analysis && videoFile && getFileKey(analysis.file) === getFileKey(videoFile) ? analysis : null;
+    const currentAnalysis = analysis && videoUrl && analysis.videoUrl === videoUrl ? analysis : null;
     const duration = videoDuration > 0 ? videoDuration : currentAnalysis?.duration ?? 0;
 
     // At zoom = 0%: zoomScale = 1.0 (entire video visible without horizontal scrollbar)
@@ -369,7 +369,7 @@ export function Timeline({videoFile, captions, activeCaptionId, currentTime, vid
         const handleWheel = (event: WheelEvent) => {
             if (event.ctrlKey || event.metaKey) {
                 event.preventDefault();
-                if (!videoFile || duration <= 0) return;
+                if (!videoUrl || duration <= 0) return;
 
                 if (scrollContainerRef.current) {
                     const container = scrollContainerRef.current;
@@ -389,7 +389,7 @@ export function Timeline({videoFile, captions, activeCaptionId, currentTime, vid
 
         section.addEventListener('wheel', handleWheel, {passive: false});
         return () => section.removeEventListener('wheel', handleWheel);
-    }, [videoFile, duration, zoomScale]);
+    }, [videoUrl, duration, zoomScale]);
 
     // Keep playhead visible during playback/seeking when zoomed
     useEffect(() => {
@@ -461,15 +461,15 @@ export function Timeline({videoFile, captions, activeCaptionId, currentTime, vid
             </div>
             <div className="flex items-center gap-[11px] text-[11px] text-[#aab4c4] max-[1320px]:gap-[7px]">
                 <button className="grid size-[31px] cursor-pointer place-items-center rounded-lg hover:enabled:bg-[#202939] hover:enabled:text-white disabled:opacity-40" aria-label={copy.search} disabled={captions.length === 0}><SearchIcon/></button>
-                <label className={`flex items-center gap-[7px] whitespace-nowrap max-[1320px]:text-[0px] ${videoFile ? 'cursor-pointer' : 'opacity-40'}`}><input className="peer absolute opacity-0" type="checkbox" checked={showWaveform} disabled={!videoFile} onChange={event => setShowWaveform(event.target.checked)}/><span className="toggle-switch relative h-[19px] w-[34px] rounded-full bg-[#343d4d] p-[2px] transition-colors peer-checked:bg-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#958aff]"/>{copy.waveform}</label>
-                <button type="button" onClick={() => setZoom(z => Math.max(0, z - 10))} disabled={!videoFile || zoom <= 0} className="cursor-pointer text-xl font-light leading-none text-[#aab4c4] hover:text-white disabled:opacity-30 select-none">−</button>
-                <input aria-label={copy.zoom} aria-valuetext={zoomTitle} title={zoomTitle} className="zoom h-1 w-[80px] cursor-pointer rounded-[10px] bg-[#30394a] accent-primary disabled:opacity-40" type="range" min="0" max="100" value={zoom} disabled={!videoFile} onChange={event => setZoom(Number(event.target.value))}/>
-                <button type="button" onClick={() => setZoom(z => Math.min(100, z + 10))} disabled={!videoFile || zoom >= 100} className="cursor-pointer text-xl font-light leading-none text-[#aab4c4] hover:text-white disabled:opacity-30 select-none">+</button>
+                <label className={`flex items-center gap-[7px] whitespace-nowrap max-[1320px]:text-[0px] ${videoUrl ? 'cursor-pointer' : 'opacity-40'}`}><input className="peer absolute opacity-0" type="checkbox" checked={showWaveform} disabled={!videoUrl} onChange={event => setShowWaveform(event.target.checked)}/><span className="toggle-switch relative h-[19px] w-[34px] rounded-full bg-[#343d4d] p-[2px] transition-colors peer-checked:bg-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#958aff]"/>{copy.waveform}</label>
+                <button type="button" onClick={() => setZoom(z => Math.max(0, z - 10))} disabled={!videoUrl || zoom <= 0} className="cursor-pointer text-xl font-light leading-none text-[#aab4c4] hover:text-white disabled:opacity-30 select-none">−</button>
+                <input aria-label={copy.zoom} aria-valuetext={zoomTitle} title={zoomTitle} className="zoom h-1 w-[80px] cursor-pointer rounded-[10px] bg-[#30394a] accent-primary disabled:opacity-40" type="range" min="0" max="100" value={zoom} disabled={!videoUrl} onChange={event => setZoom(Number(event.target.value))}/>
+                <button type="button" onClick={() => setZoom(z => Math.min(100, z + 10))} disabled={!videoUrl || zoom >= 100} className="cursor-pointer text-xl font-light leading-none text-[#aab4c4] hover:text-white disabled:opacity-30 select-none">+</button>
                 <span className="min-w-[32px] text-right font-mono text-[10px] text-[#8e99aa] select-none" title={zoomTitle}>{zoom === 0 ? '100%' : `~${visibleSeconds}s`}</span>
             </div>
         </header>
         <div ref={scrollContainerRef} className="timeline-scroll min-h-0 flex-1 overflow-auto" style={{'--timeline-scale': `${zoomScale}`} as CSSProperties}>
-            {videoFile && <>
+            {videoUrl && <>
                 <div ref={trackRef} className={`relative h-full w-[calc(100%*var(--timeline-scale))] touch-none ${duration > 0 ? 'cursor-crosshair' : ''}`} onPointerDown={event => {
                     if (duration <= 0 || (event.target instanceof Element && event.target.closest('[data-caption]'))) return;
                     draggingRef.current = true;
@@ -495,6 +495,12 @@ export function Timeline({videoFile, captions, activeCaptionId, currentTime, vid
                         const end = Math.min(duration, caption.end);
                         return <button key={caption.id} data-caption type="button" className={`absolute top-0 h-12 min-w-[20px] cursor-pointer overflow-hidden rounded-[9px] border px-2 text-ellipsis whitespace-nowrap text-[11px] font-semibold text-[#e3e7ee] hover:bg-[#252e40] ${activeCaptionId === caption.id ? 'border-[#7669ff] bg-[#5f52e7] shadow-[0_7px_17px_rgba(72,57,206,.22)]' : 'border-transparent bg-[#1d2533]'}`} style={{left: `${start / duration * 100}%`, width: `${(end - start) / duration * 100}%`}} onClick={() => onCaptionSelect(caption.id)}>{caption.text}</button>;
                     })}</div>}
+                    {isGenerating && <div className="relative flex h-12 items-center gap-1.5 overflow-hidden" aria-hidden="true">
+                        {[16, 12, 21, 14, 18, 11].map((width, index) => (
+                            <span key={index} className="h-9 shrink-0 rounded-[9px] border border-[#50477d]/40 bg-[#39345c]/60" style={{width: `${width}%`}} />
+                        ))}
+                        <span className="pointer-events-none absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-[#a99fff]/18 to-transparent" />
+                    </div>}
                     {showWaveform && currentAnalysis?.status === 'loading' && (
                         <WaveformSkeleton captionsCount={captions.length} label={copy.analyzing} />
                     )}

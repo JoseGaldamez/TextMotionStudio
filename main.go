@@ -17,14 +17,16 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "TextMotionStudio",
-		Width:     1920,
-		Height:    1080,
-		MinWidth:  1280,
-		MinHeight: 720,
-		Frameless: true,
+		Title:       "TextMotionStudio",
+		Width:       1920,
+		Height:      1080,
+		MinWidth:    1280,
+		MinHeight:   720,
+		Frameless:   true,
+		DragAndDrop: &options.DragAndDrop{EnableFileDrop: true},
 		AssetServer: &assetserver.Options{
-			Assets: assets,
+			Assets:     assets,
+			Middleware: app.videoAssetMiddleware,
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup:        app.startup,

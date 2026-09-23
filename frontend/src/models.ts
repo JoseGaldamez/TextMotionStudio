@@ -1,4 +1,6 @@
-export interface Caption { id: string; text: string; start: number; end: number; }
+export interface CaptionWord { id: string; text: string; start: number; end: number; confidence?: number; }
+export interface Caption { id: string; start: number; end: number; words: CaptionWord[]; text: string; }
+export interface Transcription { language: string; detectedLanguage?: string; model: string; words: CaptionWord[]; captionGroups: Caption[]; }
 export interface CaptionStyle {
     id: string;
     name: string;
@@ -20,5 +22,4 @@ export interface CaptionStyle {
     isCustom?: boolean;
     createdAt?: number;
 }
-export interface VideoProject { videoName: string | null; videoUrl: string | null; captions: Caption[]; selectedStyle: CaptionStyle; captionSize: number; captionPosition: number; }
-
+export interface VideoProject { videoName: string | null; videoUrl: string | null; videoPath: string | null; captions: Caption[]; transcription?: Transcription; selectedStyle: CaptionStyle; captionSize: number; captionPosition: number; }

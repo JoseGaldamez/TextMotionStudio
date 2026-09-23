@@ -84,9 +84,15 @@ func TestDownloadValidatesRenamesAndCleansTemporaryFile(t *testing.T) {
 	dir := t.TempDir()
 	def := testDefinition(data, server.URL)
 	done := make(chan string, 4)
-	m := NewWith(dir, []Definition{def}, server.Client(), func(name string, _ any) {
+	var m *Manager
+	m = NewWith(dir, []Definition{def}, server.Client(), func(name string, _ any) {
 		if name != "model:download:progress" {
-			done <- name
+			list, err := m.List()
+			if err != nil {
+				done <- err.Error()
+			} else {
+				done <- name + ":" + list[0].Status
+			}
 		}
 	})
 	if err := m.Download(def.ID); err != nil {
@@ -94,7 +100,7 @@ func TestDownloadValidatesRenamesAndCleansTemporaryFile(t *testing.T) {
 	}
 	select {
 	case event := <-done:
-		if event != "model:download:completed" {
+		if event != "model:download:completed:installed" {
 			t.Fatalf("unexpected event %s", event)
 		}
 	case <-time.After(3 * time.Second):

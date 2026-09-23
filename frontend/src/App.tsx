@@ -5,9 +5,12 @@ import {TitleBar} from './components/TitleBar';
 import {Timeline} from './components/Timeline';
 import {VideoPreview} from './components/VideoPreview';
 import {WorkflowPanel} from './components/WorkflowPanel';
+import {ModelSelector} from './components/ModelSelector';
 import {Onboarding} from './components/onboarding/Onboarding';
-import type {Caption, CaptionStyle, VideoProject} from './models';
-import {GetAppConfig, UpdateAppConfig} from '../wailsjs/go/main/App';
+import type {CaptionStyle, Transcription, VideoProject} from './models';
+import {CancelCaptionGeneration, GenerateCaptions, GetAppConfig, RegisterVideoFile, SelectVideoFile, UpdateAppConfig} from '../wailsjs/go/main/App';
+import {CanResolveFilePaths, OnFileDrop, OnFileDropOff} from '../wailsjs/runtime/runtime';
+import {findActiveCaption} from './captionTiming';
 import type {config} from '../wailsjs/go/models';
 import {getCopy, type Language} from './i18n';
 import {StylesView} from './components/views/StylesView';
@@ -15,15 +18,6 @@ import {TemplatesView} from './components/views/TemplatesView';
 import {ExportView} from './components/views/ExportView';
 import {SettingsView} from './components/views/SettingsView';
 import {DEFAULT_STYLES, getAllStyles, loadCustomStyles, saveCustomStyles} from './captionStyles';
-
-const mockCaptions: Caption[] = [
-    {id: 'c1', text: 'Great ideas', start: 0, end: 4.2},
-    {id: 'c2', text: 'deserve', start: 4.2, end: 7.1},
-    {id: 'c3', text: 'to be seen.', start: 7.1, end: 11.4},
-    {id: 'c4', text: 'Make your videos', start: 11.4, end: 17.2},
-    {id: 'c5', text: 'stand out', start: 17.2, end: 21.3},
-    {id: 'c6', text: 'with TextMotion Studio.', start: 21.3, end: 28},
-];
 
 const defaultVideoFraction = 0.61;
 const minVideoHeight = 220;
@@ -43,9 +37,12 @@ function App() {
     const [activeNav, setActiveNav] = useState('Create');
     const [customStyles, setCustomStyles] = useState<CaptionStyle[]>(() => loadCustomStyles());
     const allStyles = getAllStyles(customStyles);
-    const [project, setProject] = useState<VideoProject>({videoName: null, videoUrl: null, captions: mockCaptions, selectedStyle: DEFAULT_STYLES[0], captionSize: 100, captionPosition: 0});
+    const [project, setProject] = useState<VideoProject>({videoName: null, videoUrl: null, videoPath: null, captions: [], selectedStyle: DEFAULT_STYLES[0], captionSize: 100, captionPosition: 0});
     const [isGenerating, setIsGenerating] = useState(false);
+    const [readyModelId, setReadyModelId] = useState<string | null>(null);
     const [captionsReady, setCaptionsReady] = useState(false);
+    const [captionLanguage, setCaptionLanguage] = useState('auto');
+    const [generationError, setGenerationError] = useState('');
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [playbackTime, setPlaybackTime] = useState(0);
     const [videoDuration, setVideoDuration] = useState(0);
@@ -54,12 +51,44 @@ function App() {
     const [seekRequest, setSeekRequest] = useState<{time: number; id: number} | null>(null);
     const [videoFraction, setVideoFraction] = useState(defaultVideoFraction);
     const videoPanelRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const browserSelectionRef = useRef<{name: string; url: string} | null>(null);
     const timelinePanelRef = useRef<HTMLDivElement>(null);
     const resizeStartRef = useRef<{y: number; videoHeight: number; totalHeight: number} | null>(null);
     const language: Language = appConfig?.language === 'es' ? 'es' : 'en';
     const copy = getCopy(language);
 
     useEffect(() => {document.documentElement.lang = language}, [language]);
+
+    useEffect(() => () => {
+        if (project.videoUrl?.startsWith('blob:')) URL.revokeObjectURL(project.videoUrl);
+    }, [project.videoUrl]);
+
+    useEffect(() => {
+        OnFileDrop((x, y, paths) => {
+            const fromPicker = x === -1 && y === -1;
+            const target = document.elementFromPoint(x, y);
+            if (!fromPicker && !(target instanceof Element && target.closest('[data-video-drop-target]'))) return;
+            const path = paths[0];
+            if (!path) return;
+            void RegisterVideoFile(path).then(selected => {
+                const browserSelection = browserSelectionRef.current;
+                if (browserSelection?.name === selected.name) {
+                    setProject(current => current.videoUrl === browserSelection.url ? {...current, videoPath: selected.path} : current);
+                    return;
+                }
+                browserSelectionRef.current = null;
+                setVideoFile(null);
+                setCaptionsReady(false);
+                setGenerationError('');
+                setPlaybackTime(0);
+                setVideoDuration(0);
+                setSeekRequest(null);
+                setProject(current => ({...current, videoName: selected.name, videoUrl: selected.url, videoPath: selected.path, captions: [], transcription: undefined}));
+            }).catch(error => setGenerationError(String(error)));
+        }, false);
+        return () => OnFileDropOff();
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -75,28 +104,49 @@ function App() {
         return () => {cancelled = true};
     }, [loadAttempt]);
 
-    useEffect(() => () => {
-        if (project.videoUrl) URL.revokeObjectURL(project.videoUrl);
-    }, [project.videoUrl]);
-
-    const selectVideo = (file: File) => {
+    const selectBrowserVideo = (file: File) => {
         if (!file.type.startsWith('video/') && !/\.(mp4|mov|mkv|avi|webm|m4v)$/i.test(file.name)) return;
         const url = URL.createObjectURL(file);
+        browserSelectionRef.current = {name: file.name, url};
         setVideoFile(file);
+        setCaptionsReady(false);
+        setGenerationError('');
+        setPlaybackTime(0);
+        setVideoDuration(0);
+        setSeekRequest(null);
+        setProject(current => ({...current, videoName: file.name, videoUrl: url, videoPath: null, captions: [], transcription: undefined}));
+    };
+
+    const chooseVideo = async () => {
+        if (CanResolveFilePaths()) { fileInputRef.current?.click(); return; }
+        const selected = await SelectVideoFile();
+        if (!selected) return;
+        browserSelectionRef.current = null;
+        setVideoFile(null);
         setCaptionsReady(false);
         setPlaybackTime(0);
         setVideoDuration(0);
         setSeekRequest(null);
         setProject((current) => {
-            if (current.videoUrl) URL.revokeObjectURL(current.videoUrl);
-            return {...current, videoName: file.name, videoUrl: url};
+            return {...current, videoName: selected.name, videoUrl: selected.url, videoPath: selected.path, captions: [], transcription: undefined};
         });
     };
 
-    const generateCaptions = () => {
-        if (isGenerating || !project.videoUrl) return;
+    const generateCaptions = async () => {
+        if (isGenerating) return;
+        if (!project.videoPath) { setGenerationError("We couldn't access the local path for this video."); return; }
         setIsGenerating(true);
-        window.setTimeout(() => {setIsGenerating(false); setCaptionsReady(true);}, 900);
+        setGenerationError('');
+        try {
+            const raw = await GenerateCaptions(project.videoPath, captionLanguage);
+            const captionGroups = raw.captionGroups.map(group => ({...group, text: group.words.map(word => word.text).join(' ')}));
+            const transcription: Transcription = {...raw, captionGroups};
+            setProject(current => ({...current, transcription, captions: captionGroups}));
+            setCaptionsReady(true);
+        } catch (reason) {
+            setCaptionsReady(false);
+            setGenerationError(String(reason));
+        } finally { setIsGenerating(false); }
     };
 
     const seekTo = (time: number) => {
@@ -104,7 +154,7 @@ function App() {
         setPlaybackTime(nextTime);
         setSeekRequest(current => ({time: nextTime, id: (current?.id ?? 0) + 1}));
     };
-    const activeCaption = captionsReady ? project.captions.find(caption => playbackTime >= caption.start && playbackTime < caption.end) : undefined;
+    const activeCaption = captionsReady ? findActiveCaption(project.captions, playbackTime) : undefined;
     const clampVideoHeight = (height: number, total: number) => Math.max(minVideoHeight, Math.min(total - minTimelineHeight, height));
     const resizePanelsBy = (pixels: number) => {
         const videoHeight = videoPanelRef.current?.getBoundingClientRect().height ?? 0;
@@ -168,14 +218,22 @@ function App() {
                 ? 'grid-cols-[214px_370px_minmax(0,1fr)] max-[1320px]:grid-cols-[188px_334px_minmax(0,1fr)]'
                 : 'grid-cols-[214px_minmax(0,1fr)] max-[1320px]:grid-cols-[188px_minmax(0,1fr)]'
         }`}>
+            <input ref={fileInputRef} className="hidden" type="file" accept="video/*" onChange={event => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (!file) return;
+                selectBrowserVideo(file);
+                const resolver = (window as Window & {runtime?: {ResolveFilePaths?: (x: number, y: number, files: File[]) => void}}).runtime?.ResolveFilePaths;
+                resolver?.(-1, -1, [file]);
+            }}/>
             <Sidebar activeItem={activeNav} onSelect={setActiveNav} language={language}/>
 
             {activeNav === 'Create' && (
                 <>
-                    <WorkflowPanel project={project} styles={allStyles} captionsReady={captionsReady} isGenerating={isGenerating} language={language} onVideoSelect={selectVideo} onGenerate={generateCaptions} onStyleSelect={(selectedStyle) => setProject((current) => ({...current, selectedStyle}))} onCaptionSizeChange={(captionSize) => setProject((current) => ({...current, captionSize}))} onCaptionPositionChange={(captionPosition) => setProject((current) => ({...current, captionPosition}))}/>
+                    <WorkflowPanel project={project} styles={allStyles} captionsReady={captionsReady} isGenerating={isGenerating} readyModelId={readyModelId} generationError={generationError} captionLanguage={captionLanguage} language={language} onChooseVideo={() => void chooseVideo()} onVideoSelect={selectBrowserVideo} onGenerate={() => void generateCaptions()} onCancel={CancelCaptionGeneration} onCaptionLanguageChange={setCaptionLanguage} onStyleSelect={(selectedStyle) => setProject((current) => ({...current, selectedStyle}))} onCaptionSizeChange={(captionSize) => setProject((current) => ({...current, captionSize}))} onCaptionPositionChange={(captionPosition) => setProject((current) => ({...current, captionPosition}))}/>
                     <section className="workspace-grid grid min-h-0 min-w-0 overflow-hidden bg-[#0d121b] p-[18px] max-[1320px]:px-3" style={{'--video-flex': `${videoFraction}fr`, '--timeline-flex': `${1 - videoFraction}fr`} as CSSProperties} aria-label={copy.app.workspace}>
-                        <header className="flex items-center justify-between px-1 text-xs text-[#7f899b]"><div className="flex min-w-0 items-center gap-2"><span className="size-[7px] rounded-full bg-[#41b882] shadow-[0_0_0_3px_rgba(65,184,130,.09)]" aria-hidden="true"/><span className="overflow-hidden text-ellipsis whitespace-nowrap">{project.videoName ?? copy.app.untitled}</span></div><p className="m-0">{copy.app.tagline}</p></header>
-                        <div ref={videoPanelRef} className="min-h-0"><VideoPreview videoUrl={project.videoUrl} captionStyle={project.selectedStyle} captionSize={project.captionSize} captionPosition={project.captionPosition} activeCaption={activeCaption} playbackTime={playbackTime} videoDuration={videoDuration} playPauseRequest={playPauseRequest} onPlayingChange={setIsPlaying} onPlaybackTimeChange={setPlaybackTime} onDurationChange={setVideoDuration} seekRequest={seekRequest} onSeek={seekTo} onVideoSelect={selectVideo} language={language}/></div>
+                        <header className="relative z-20 flex min-w-0 items-center justify-between gap-4 px-1 text-xs text-[#7f899b]"><div className="flex min-w-0 items-center gap-2"><span className="size-[7px] shrink-0 rounded-full bg-[#41b882] shadow-[0_0_0_3px_rgba(65,184,130,.09)]" aria-hidden="true"/><span className="overflow-hidden text-ellipsis whitespace-nowrap">{project.videoName ?? copy.app.untitled}</span></div><ModelSelector language={language} isGenerating={isGenerating} onReadyModelChange={setReadyModelId}/></header>
+                        <div ref={videoPanelRef} className="min-h-0"><VideoPreview videoUrl={project.videoUrl} captions={captionsReady ? project.captions : []} captionStyle={project.selectedStyle} captionSize={project.captionSize} captionPosition={project.captionPosition} playbackTime={playbackTime} videoDuration={videoDuration} playPauseRequest={playPauseRequest} onPlayingChange={setIsPlaying} onPlaybackTimeChange={setPlaybackTime} onDurationChange={setVideoDuration} seekRequest={seekRequest} onSeek={seekTo} onChooseVideo={() => void chooseVideo()} onVideoSelect={selectBrowserVideo} language={language}/></div>
                         <div role="separator" tabIndex={0} aria-label={copy.app.resizePanels} aria-orientation="horizontal" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(videoFraction * 100)} className="group flex cursor-row-resize touch-none items-center justify-center focus-visible:outline-2 focus-visible:outline-highlight" onPointerDown={event => {
                             const videoHeight = videoPanelRef.current?.getBoundingClientRect().height ?? 0;
                             const timelineHeight = timelinePanelRef.current?.getBoundingClientRect().height ?? 0;
@@ -191,7 +249,7 @@ function App() {
                                 event.preventDefault();
                             }
                         }}><span className="h-1 w-12 rounded-full bg-[#354055] transition-colors group-hover:bg-primary group-focus-visible:bg-primary"/></div>
-                        <div ref={timelinePanelRef} className="min-h-0"><Timeline videoFile={videoFile} captions={captionsReady ? project.captions : []} activeCaptionId={activeCaption?.id ?? ''} currentTime={playbackTime} videoDuration={videoDuration} isPlaying={isPlaying} onSeek={seekTo} onCaptionSelect={(id) => {const caption = project.captions.find(item => item.id === id); if (caption) seekTo(caption.start)}} onTogglePlay={() => setPlayPauseRequest(req => req + 1)} language={language}/></div>
+                        <div ref={timelinePanelRef} className="min-h-0"><Timeline videoUrl={project.videoUrl} videoFile={videoFile} captions={captionsReady && !isGenerating ? project.captions : []} isGenerating={isGenerating} activeCaptionId={activeCaption?.id ?? ''} currentTime={playbackTime} videoDuration={videoDuration} isPlaying={isPlaying} onSeek={seekTo} onCaptionSelect={(id) => {const caption = project.captions.find(item => item.id === id); if (caption) seekTo(caption.start)}} onTogglePlay={() => setPlayPauseRequest(req => req + 1)} language={language}/></div>
                     </section>
                 </>
             )}

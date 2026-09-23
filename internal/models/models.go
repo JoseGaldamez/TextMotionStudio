@@ -161,7 +161,6 @@ func (m *Manager) Download(id string) error {
 func (m *Manager) download(ctx context.Context, d Definition) {
 	tmp := m.path(d) + ".download"
 	defer os.Remove(tmp)
-	defer func() { m.mu.Lock(); delete(m.cancels, d.ID); m.mu.Unlock() }()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, d.URL, nil)
 	if err != nil {
 		m.fail(d.ID, err)
@@ -171,7 +170,7 @@ func (m *Manager) download(ctx context.Context, d Definition) {
 	if err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
 			_ = os.Remove(tmp)
-			m.emitEvent("model:download:canceled", map[string]any{"modelId": d.ID})
+			m.finish(d.ID, "model:download:canceled", map[string]any{"modelId": d.ID})
 			return
 		}
 		m.fail(d.ID, errors.New("Download interrupted. Check your internet connection and try again."))
@@ -219,7 +218,7 @@ func (m *Manager) download(ctx context.Context, d Definition) {
 	if err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
 			_ = os.Remove(tmp)
-			m.emitEvent("model:download:canceled", map[string]any{"modelId": d.ID})
+			m.finish(d.ID, "model:download:canceled", map[string]any{"modelId": d.ID})
 		} else {
 			m.fail(d.ID, errors.New("Download interrupted. Check your internet connection and try again."))
 		}
@@ -236,7 +235,7 @@ func (m *Manager) download(ctx context.Context, d Definition) {
 		m.fail(d.ID, err)
 		return
 	}
-	m.emitEvent("model:download:completed", map[string]any{"modelId": d.ID})
+	m.finish(d.ID, "model:download:completed", map[string]any{"modelId": d.ID})
 }
 
 func (m *Manager) validTemporary(d Definition, path string) bool { return validFile(path, d) }
@@ -246,7 +245,13 @@ func (m *Manager) emitEvent(name string, payload any) {
 	}
 }
 func (m *Manager) fail(id string, err error) {
-	m.emitEvent("model:download:error", map[string]any{"modelId": id, "message": err.Error()})
+	m.finish(id, "model:download:error", map[string]any{"modelId": id, "message": err.Error()})
+}
+func (m *Manager) finish(id, name string, payload any) {
+	m.mu.Lock()
+	delete(m.cancels, id)
+	m.mu.Unlock()
+	m.emitEvent(name, payload)
 }
 
 func (m *Manager) Cancel(id string) {
@@ -295,17 +300,21 @@ func (m *Manager) Select(id string) error {
 	return config.Save(cfg)
 }
 func (m *Manager) SelectedPath() (string, error) {
+	p, _, err := m.Selected()
+	return p, err
+}
+func (m *Manager) Selected() (string, string, error) {
 	cfg, err := config.Load()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if cfg.SelectedModel == "" {
-		return "", ErrNoSelectedModel
+		return "", "", ErrNoSelectedModel
 	}
 	d, err := m.definition(cfg.SelectedModel)
 	if err != nil || !m.valid(d) {
-		return "", ErrNoSelectedModel
+		return "", "", ErrNoSelectedModel
 	}
 	p, err := filepath.Abs(m.path(d))
-	return p, err
+	return p, d.ID, err
 }
