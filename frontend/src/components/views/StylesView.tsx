@@ -103,6 +103,27 @@ export function StylesView({
         setSelectedStyleId(style.id);
     };
 
+    const handleApplyCurrentDraft = () => {
+        const styleToApply: CaptionStyle = {
+            ...activeCustomStyle,
+            name: styleName.trim() || activeCustomStyle.name,
+            fontFamily,
+            fontSize,
+            letterSpacing,
+            textColor,
+            highlightColor,
+            hasBgPill,
+            bgPillColor,
+            textShadow,
+        };
+        onSelectStyle(styleToApply);
+        if (activeCustomStyle.isCustom) {
+            onSaveCustomStyle(styleToApply);
+        }
+        setSavedNotice(language === 'es' ? '¡Estilo aplicado al proyecto!' : 'Style applied to project!');
+        setTimeout(() => setSavedNotice(''), 2500);
+    };
+
     const handleSaveNewStyle = () => {
         const finalName = styleName.trim() || `${activeCustomStyle.name} Copia`;
         const newStyle: CaptionStyle = {
@@ -143,7 +164,16 @@ export function StylesView({
         }
     };
 
-    const isCurrentActiveSelected = project.selectedStyle.id === activeCustomStyle?.id;
+    const isCurrentActiveSelected =
+        project.selectedStyle.id === activeCustomStyle?.id &&
+        (project.selectedStyle.highlightColor ?? '#8a7dff') === highlightColor &&
+        (project.selectedStyle.textColor ?? '#ffffff') === textColor &&
+        (project.selectedStyle.fontSize ?? 28) === fontSize &&
+        (project.selectedStyle.fontFamily ?? 'Nunito, sans-serif') === fontFamily &&
+        Boolean(project.selectedStyle.hasBgPill) === hasBgPill &&
+        (project.selectedStyle.bgPillColor ?? 'rgba(15, 23, 42, 0.85)') === bgPillColor &&
+        (project.selectedStyle.textShadow ?? 'none') === textShadow &&
+        (project.selectedStyle.letterSpacing ?? 1) === letterSpacing;
 
     return (
         <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-[#0c1017] text-foreground">
@@ -286,15 +316,46 @@ export function StylesView({
                                             fontWeight: style.fontFamily?.includes('Impact') ? 900 : 700,
                                         }}
                                     >
-                                        {style.sampleWord ?? 'SAMPLE'}
+                                        {(() => {
+                                            const sample = style.sampleWord ?? 'SAMPLE';
+                                            const words = sample.split(' ');
+                                            if (words.length > 1) {
+                                                return (
+                                                    <>
+                                                        <span style={{color: style.highlightColor ?? '#8a7dff'}}>{words[0]}</span>{' '}
+                                                        <span>{words.slice(1).join(' ')}</span>
+                                                    </>
+                                                );
+                                            }
+                                            return (
+                                                <span style={{color: style.highlightColor ?? style.textColor ?? '#ffffff'}}>
+                                                    {sample}
+                                                </span>
+                                            );
+                                        })()}
                                     </p>
                                 </div>
 
                                 {/* Typography & Meta Info */}
                                 <div className="mt-2.5">
-                                    <h3 className={`text-xs font-semibold ${isSelectedInInspector ? 'text-white' : 'text-[#ccd5e2]'}`}>
-                                        {localizedName}
-                                    </h3>
+                                    <div className="flex items-center justify-between gap-1.5">
+                                        <h3 className={`text-xs font-semibold truncate ${isSelectedInInspector ? 'text-white' : 'text-[#ccd5e2]'}`}>
+                                            {localizedName}
+                                        </h3>
+                                        <div
+                                            className="flex items-center gap-1 shrink-0"
+                                            title={`Texto: ${style.textColor ?? '#ffffff'} | Énfasis: ${style.highlightColor ?? '#8a7dff'}`}
+                                        >
+                                            <span
+                                                className="size-2.5 rounded-full border border-black/40 shadow-xs"
+                                                style={{backgroundColor: style.textColor ?? '#ffffff'}}
+                                            />
+                                            <span
+                                                className="size-2.5 rounded-full border border-black/40 shadow-xs"
+                                                style={{backgroundColor: style.highlightColor ?? '#8a7dff'}}
+                                            />
+                                        </div>
+                                    </div>
                                     <p className="mt-0.5 line-clamp-1 text-[11px] text-[#6f7e94]">
                                         {localizedDesc}
                                     </p>
@@ -518,7 +579,7 @@ export function StylesView({
                     {/* Apply current style to project */}
                     <button
                         type="button"
-                        onClick={() => handleApply(activeCustomStyle)}
+                        onClick={handleApplyCurrentDraft}
                         className={`flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg font-bold text-xs transition-all ${
                             isCurrentActiveSelected
                                 ? 'border border-emerald-500/40 bg-emerald-500/15 text-emerald-300 cursor-default'

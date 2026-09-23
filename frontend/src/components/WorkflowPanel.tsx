@@ -171,19 +171,21 @@ export function WorkflowPanel({project, styles, captionsReady, isGenerating, rea
                 aria-expanded={stylesOpen}
             >
                 <span
-                    className="grid size-[50px] shrink-0 place-items-center rounded-[9px] font-extrabold text-[17px] shadow-sm transition-all"
+                    className="grid size-[50px] shrink-0 place-items-center rounded-[9px] font-extrabold text-[17px] shadow-sm transition-all select-none"
                     style={{
                         fontFamily: project.selectedStyle.fontFamily ?? 'Nunito, sans-serif',
-                        color: project.selectedStyle.textColor ?? '#ffffff',
                         backgroundColor: project.selectedStyle.hasBgPill
                             ? (project.selectedStyle.bgPillColor ?? '#5d50ee')
-                            : (project.selectedStyle.id === 'karaoke' ? '#f1df3c' : project.selectedStyle.id === 'pop' ? '#f04b89' : '#1f2736'),
+                            : (project.selectedStyle.id === 'pop' ? '#f04b89' : '#1f2736'),
                         textShadow: project.selectedStyle.textShadow && project.selectedStyle.textShadow !== 'none'
                             ? project.selectedStyle.textShadow
                             : undefined,
                     }}
                 >
-                    Aa
+                    <span>
+                        <span style={{color: project.selectedStyle.highlightColor ?? '#8a7dff'}}>A</span>
+                        <span style={{color: project.selectedStyle.textColor ?? '#ffffff'}}>a</span>
+                    </span>
                 </span>
                 <span className="mx-3 min-w-0 flex-1">
                     <strong className="block text-white truncate">{currentStyleName}</strong>
@@ -212,16 +214,18 @@ export function WorkflowPanel({project, styles, captionsReady, isGenerating, rea
                             >
                                 <div className="flex items-center gap-2.5 min-w-0">
                                     <span
-                                        className="grid size-6 shrink-0 place-items-center rounded text-[10px] font-black"
+                                        className="grid size-6 shrink-0 place-items-center rounded text-[10px] font-black select-none"
                                         style={{
                                             fontFamily: style.fontFamily ?? 'sans-serif',
-                                            color: style.textColor ?? '#ffffff',
                                             backgroundColor: style.hasBgPill
                                                 ? (style.bgPillColor ?? '#5d50ee')
                                                 : '#273142',
                                         }}
                                     >
-                                        Aa
+                                        <span>
+                                            <span style={{color: style.highlightColor ?? '#8a7dff'}}>A</span>
+                                            <span style={{color: style.textColor ?? '#ffffff'}}>a</span>
+                                        </span>
                                     </span>
                                     <span className="truncate">{name}</span>
                                     {style.isCustom && (

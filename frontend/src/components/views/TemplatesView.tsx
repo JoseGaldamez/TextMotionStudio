@@ -171,6 +171,7 @@ export function TemplatesView({language, onApplyTemplate}: Props) {
             id: template.styleId,
             name: template.title,
             description: template.description,
+            highlightColor: template.accentColor ?? baseStyle.highlightColor,
         };
         setTimeout(() => {
             onApplyTemplate(style);
