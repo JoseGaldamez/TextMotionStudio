@@ -22,16 +22,17 @@ test -f "$whisper_artifact/whisper-cli.exe"
 test -f "$whisper_artifact/SHA256SUMS"
 test "$(cat "$whisper_artifact/VERSION")" = "$whisper_version"
 cmp "$whisper_artifact/SOURCE.txt" "$root/third_party/whisper/SOURCE.txt"
-(cd "$whisper_artifact" && sha256sum -c SHA256SUMS)
+(cd "$whisper_artifact" && tr -d '\r' < SHA256SUMS | sha256sum -c -)
 test "$(sha256sum "$whisper_artifact/whisper-cli.exe" | awk '{print $1}')" = "$(awk '{print $1}' "$root/third_party/whisper/SHA256SUMS.windows-amd64-msvc-candidate")"
 mkdir -p "$(dirname "$source_root")" "$output"
 
 git clone --depth 1 --branch "n$ffmpeg_version" https://github.com/FFmpeg/FFmpeg.git "$source_root"
 test "$(git -C "$source_root" rev-parse HEAD)" = 946fcce07b6dcd0331c8cc609192aeff5e1924f8
 pushd "$source_root" >/dev/null
+printf '%s\n' "$ffmpeg_version" > VERSION
 ./configure --target-os=mingw32 --arch=x86_64 --enable-static --disable-shared \
   --disable-autodetect --disable-programs --enable-ffmpeg --disable-doc \
-  --disable-debug --disable-ffplay --disable-ffprobe
+  --disable-debug --disable-ffplay --disable-ffprobe --extra-ldflags=-static
 make -j2
 cp ffmpeg.exe "$output/ffmpeg.exe"
 git archive --format=tar.gz --output="$output/ffmpeg-source.tar.gz" HEAD
