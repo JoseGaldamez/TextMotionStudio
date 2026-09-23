@@ -6,6 +6,7 @@ import {getCopy, getModelCopy, type Language} from '../../i18n';
 import type {config} from '../../../wailsjs/go/models';
 import {useLocalModels} from '../../useLocalModels';
 import type {ModelInfo} from '../onboarding/modelDownload';
+import thirdPartyNotices from '../../../../THIRD_PARTY_NOTICES.txt?raw';
 
 interface Props {
     language: Language;
@@ -428,6 +429,13 @@ export function SettingsView({language, appConfig, onLanguageChange}: Props) {
                                     {copy.viewDocs}
                                 </button>
                             </div>
+
+                            <details className="mt-5 rounded-xl border border-[#2b374d] bg-[#161f2e] text-left">
+                                <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-[#b4c3d8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                                    {language === 'es' ? 'Licencias de código abierto' : 'Open Source Licenses'}
+                                </summary>
+                                <pre className="max-h-64 overflow-auto border-t border-[#2b374d] px-4 py-3 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-[#b4c3d8]">{thirdPartyNotices}</pre>
+                            </details>
 
                             {updateStatus && (
                                 <p className="mt-3 text-xs font-bold text-emerald-400 animate-fade-in">{updateStatus}</p>

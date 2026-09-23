@@ -1,0 +1,3 @@
+The reproducible build scripts capture -buildconf from each platform binary.
+After review, commit the exact output as build-config-<target>.txt beside this
+file. No target build has been approved yet.

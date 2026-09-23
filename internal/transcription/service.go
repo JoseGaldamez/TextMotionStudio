@@ -9,11 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	"TextMotionStudio/internal/media"
+	"TextMotionStudio/internal/runtimeassets"
 )
 
 var (
@@ -22,33 +22,13 @@ var (
 )
 
 type Service struct {
-	root string
-	emit func(string, any)
+	root        string
+	development bool
+	emit        func(string, any)
 }
 
-func New(root string, emit func(string, any)) *Service { return &Service{root: root, emit: emit} }
-
-func (s *Service) tool(env, name string) (string, error) {
-	if configured := os.Getenv(env); configured != "" {
-		if info, err := os.Stat(configured); err == nil && !info.IsDir() {
-			return configured, nil
-		}
-	}
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-	candidates := []string{
-		filepath.Join(s.root, "bin", runtime.GOOS+"-"+runtime.GOARCH, name+ext),
-		filepath.Join(s.root, "bin", name+ext),
-	}
-	for _, candidate := range candidates {
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-			return candidate, nil
-		}
-	}
-	log.Printf("caption tool unavailable: %s (checked %s and %s; override with %s)", name, candidates[0], candidates[1], env)
-	return "", ErrToolsUnavailable
+func New(root string, development bool, emit func(string, any)) *Service {
+	return &Service{root: root, development: development, emit: emit}
 }
 
 func (s *Service) emitProgress(stage string) {
@@ -61,14 +41,11 @@ func (s *Service) Generate(ctx context.Context, video, model, modelID, language 
 	if language != "auto" && language != "en" && language != "es" {
 		language = "auto"
 	}
-	ffmpeg, err := s.tool("TEXTMOTION_FFMPEG_PATH", "ffmpeg")
+	resources, err := runtimeassets.Resolve(s.root, s.development)
 	if err != nil {
-		return Result{}, err
+		return Result{}, fmt.Errorf("%w: %v", ErrToolsUnavailable, err)
 	}
-	whisper, err := s.tool("TEXTMOTION_WHISPER_PATH", "whisper-cli")
-	if err != nil {
-		return Result{}, err
-	}
+	ffmpeg, whisper := resources.FFmpegPath, resources.WhisperPath
 	help, err := exec.CommandContext(ctx, whisper, "--help").CombinedOutput()
 	if err != nil || !bytes.Contains(help, []byte("--output-json-full")) || !bytes.Contains(help, []byte("--output-file")) || !bytes.Contains(help, []byte("--max-len")) || !bytes.Contains(help, []byte("--split-on-word")) {
 		return Result{}, fmt.Errorf("unsupported whisper-cli: %w", ErrToolsUnavailable)
@@ -124,7 +101,7 @@ func FriendlyError(err error) error {
 		return errors.New("No speech was detected in this video.")
 	}
 	if errors.Is(err, ErrToolsUnavailable) {
-		return errors.New("Local transcription tools are not available in this installation.")
+		return errors.New("Caption generation is unavailable because this installation is missing required tools. Please reinstall TextMotion Studio.")
 	}
 	if strings.Contains(err.Error(), "ffmpeg:") {
 		return errors.New("We couldn't read the audio from this video.")

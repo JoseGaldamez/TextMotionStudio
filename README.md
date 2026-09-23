@@ -16,4 +16,8 @@ to this in your browser, and you can call your Go code from devtools.
 
 ## Building
 
-To build a redistributable, production mode package, use `wails build`.
+`wails build` creates the application binary, but not a release-ready package
+with native caption tools. Use the release staging instructions in
+`docs/native-dependencies.md` for Windows/macOS. Commercial distribution is
+blocked until an LGPL-compatible FFmpeg build and its corresponding source
+have been selected and documented.

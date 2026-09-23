@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,11 +44,11 @@ func (a *App) startup(ctx context.Context) {
 		emit := func(name string, payload any) { runtime.EventsEmit(ctx, name, payload) }
 		a.models = modelmanager.New(filepath.Join(directory, "models"), emit)
 		executable, executableErr := os.Executable()
-		root := "."
 		if executableErr == nil {
-			root = filepath.Dir(executable)
+			a.transcriber = transcription.New(filepath.Dir(executable), ctx.Value("buildtype") == "dev", emit)
+		} else {
+			log.Printf("cannot locate application bundle: %v", executableErr)
 		}
-		a.transcriber = transcription.New(root, emit)
 	}
 	// Development-only reset: launch with TEXTMOTION_RESET_ONBOARDING=1.
 	if ctx.Value("buildtype") == "dev" && os.Getenv("TEXTMOTION_RESET_ONBOARDING") == "1" {

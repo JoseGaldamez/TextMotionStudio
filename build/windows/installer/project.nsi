@@ -33,6 +33,9 @@ Unicode true
 ## Include the wails tools
 ####
 !include "wails_tools.nsh"
+!ifdef SUPPORTS_ARM64
+  !error "Native caption tools are currently packaged for Windows AMD64 only"
+!endif
 
 # The version information for this two must consist of 4 parts
 VIProductVersion "${INFO_PRODUCTVERSION}.0"
@@ -95,6 +98,13 @@ Section
     SetOutPath $INSTDIR
 
     !insertmacro wails.files
+
+    ; Release tooling stages approved binaries here. Missing files fail compilation.
+    SetOutPath "$INSTDIR\bin\windows-amd64"
+    File /r "runtime\windows-amd64\*.*"
+    SetOutPath $INSTDIR
+    File "..\..\..\THIRD_PARTY_NOTICES.txt"
+    File /oname=FFMPEG_LICENSE.txt "..\..\..\third_party\ffmpeg\LICENSE"
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"

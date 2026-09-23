@@ -1,0 +1,5 @@
+Project: whisper.cpp
+URL: https://github.com/ggml-org/whisper.cpp
+Tag: v1.9.2
+Commit: 306c88f4d1286aec1bf96e544632897886af5501
+Local modifications: none intended.

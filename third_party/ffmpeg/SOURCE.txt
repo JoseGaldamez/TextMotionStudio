@@ -1,0 +1,6 @@
+Project: FFmpeg
+URL: https://github.com/FFmpeg/FFmpeg
+Tag: n9.0.2
+Commit: 946fcce07b6dcd0331c8cc609192aeff5e1924f8
+Official release source: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+Local modifications: none intended; source artifact must include changes.diff.
