@@ -48,6 +48,10 @@ The Windows NSIS installer uses Wails' existing check and official WebView2
 bootstrapper fallback. It is not bundled in full. Microsoft Store EXE/MSI
 submission has an offline-installer requirement; resolve this conflict before
 Store submission (for example, use a Store-compatible packaging approach).
+The selected Store path is a full-trust desktop MSIX, documented in
+`docs/microsoft-store-distribution.md`; the Store re-signs that package after
+certification, so this path does not depend on the NSIS installer or a commercial
+publisher certificate.
 The macOS helper copies tools into the app bundle before signing; sign nested
 executables/libraries and then the app, followed by notarization. No signing
 identity or notarization workflow is configured yet.

@@ -26,6 +26,9 @@ The application is used as a desktop creative tool. Its initial window size is 1
 
 - Current scope is frontend-only, using mock data and local React state.
 - The existing stack is Wails, React, and Go.
+- The preferred public Windows distribution channel is Microsoft Store MSIX so
+  the Store supplies the production signature. Future implementation must retain
+  MSIX compatibility; see `docs/microsoft-store-distribution.md`.
 - Real transcription, FFmpeg, Whisper, export processing, and complex backend logic are out of scope for the initial interface.
 - A selected local video may be previewed with native browser video controls implemented through the custom UI.
 - Navigation and style selection need only lightweight visual state for this iteration.
