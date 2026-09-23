@@ -1,11 +1,12 @@
 import type {ReactNode, SVGProps} from 'react';
+import {Settings as LucideSettings} from 'lucide-react';
 type IconProps = SVGProps<SVGSVGElement>;
 const Icon = ({children, ...props}: IconProps & {children?: ReactNode}) => <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>{children}</svg>;
 export const HomeIcon = (p: IconProps) => <Icon {...p}><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10M9 20v-6h6v6"/></Icon>;
 export const SwatchIcon = (p: IconProps) => <Icon {...p}><path d="M12 22a10 10 0 1 0 0-20 8 8 0 0 0-8 8c0 2.2 1.8 4 4 4h1.2a1.8 1.8 0 0 1 1.3 3.1A2.9 2.9 0 0 0 12 22Z"/><circle cx="8" cy="8" r="1"/><circle cx="12" cy="6" r="1"/><circle cx="16" cy="9" r="1"/></Icon>;
 export const LayoutIcon = (p: IconProps) => <Icon {...p}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></Icon>;
 export const ExportIcon = (p: IconProps) => <Icon {...p}><path d="M12 16V3m0 0L8 7m4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></Icon>;
-export const SettingsIcon = (p: IconProps) => <Icon {...p}><circle cx="12" cy="12" r="3"/><path d="M19 15a7 7 0 0 0 .1-6l2-1-2-3-2 1a7 7 0 0 0-5-3V1H9v2a7 7 0 0 0-3 2L4 4 2 7l2 2a7 7 0 0 0 0 6l-2 2 2 3 2-1a7 7 0 0 0 5 2v2h3v-2a7 7 0 0 0 3-2l2 1 2-3Z"/></Icon>;
+export const SettingsIcon = (p: IconProps) => <LucideSettings size={20} strokeWidth={1.8} aria-hidden="true" {...p} />;
 export const VideoIcon = (p: IconProps) => <Icon {...p}><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3Z"/></Icon>;
 export const SparkleIcon = (p: IconProps) => <Icon {...p}><path d="m12 3 1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2ZM18 14l.7 2.3L21 17l-2.3.7L18 20l-.7-2.3L15 17l2.3-.7Z"/></Icon>;
 export const PlayIcon = (p: IconProps) => <Icon {...p}><path fill="currentColor" stroke="none" d="m8 5 11 7-11 7Z"/></Icon>;
@@ -13,6 +14,7 @@ export const PauseIcon = (p: IconProps) => <Icon {...p}><path d="M9 5v14M15 5v14
 export const SearchIcon = (p: IconProps) => <Icon {...p}><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></Icon>;
 export const CaptionsIcon = (p: IconProps) => <Icon {...p}><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M8 10H7a2 2 0 0 0 0 4h1m8-4h1a2 2 0 0 1 0 4h-1"/></Icon>;
 export const FullscreenIcon = (p: IconProps) => <Icon {...p}><path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"/></Icon>;
+export const FullscreenExitIcon = (p: IconProps) => <Icon {...p}><path d="M4 14h6v6m10-6h-6v6M4 10h6V4m10 6h-6V4"/></Icon>;
 export const ChevronIcon = (p: IconProps) => <Icon {...p}><path d="m9 18 6-6-6-6"/></Icon>;
 export const CheckIcon = (p: IconProps) => <Icon {...p}><path d="m5 12 4 4L19 6"/></Icon>;
 export const BoltIcon = (p: IconProps) => <Icon {...p}><path d="m13 2-8 12h7l-1 8 8-12h-7Z"/></Icon>;

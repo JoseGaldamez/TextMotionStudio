@@ -1,0 +1,202 @@
+import type {CaptionStyle} from './models';
+
+export const DEFAULT_STYLES: CaptionStyle[] = [
+    {
+        id: 'modern',
+        name: 'Modern Glow',
+        description: 'Clean typography with radiant violet gradient emphasis.',
+        category: 'trending',
+        sampleWord: 'GREAT IDEAS',
+        sampleSentence: 'Great ideas deserve to be seen.',
+        bgPreviewClass: 'bg-[#151a27] border-[#38435d]',
+        textPreviewClass: 'font-extrabold tracking-tight text-white drop-shadow-[0_2px_12px_rgba(117,104,255,0.45)]',
+        highlightColor: '#8a7dff',
+        textColor: '#ffffff',
+        badgeText: 'Word Glow',
+        fontFamily: 'Nunito, sans-serif',
+        fontSize: 30,
+        letterSpacing: 1,
+        hasBgPill: true,
+        bgPillColor: 'rgba(93, 80, 238, 0.95)',
+        textShadow: '0 0.07em 0.28em rgba(0,0,0,0.4)',
+    },
+    {
+        id: 'bold',
+        name: 'Hormozi Impact',
+        description: 'High-contrast heavy punch with vivid yellow key word accents.',
+        category: 'punchy',
+        sampleWord: 'STAND OUT',
+        sampleSentence: 'Make your videos stand out today.',
+        bgPreviewClass: 'bg-[#161a20] border-[#443f25]',
+        textPreviewClass: 'font-black tracking-normal uppercase text-yellow-300 drop-shadow-[0_4px_0_#000]',
+        highlightColor: '#facc15',
+        textColor: '#ffffff',
+        badgeText: 'Viral Punch',
+        fontFamily: 'Impact, "Arial Black", sans-serif',
+        fontSize: 35,
+        letterSpacing: 0,
+        hasBgPill: false,
+        textShadow: '0 0.08em 0 #5c4df0, 0 0.2em 0.55em #000',
+    },
+    {
+        id: 'karaoke',
+        name: 'Karaoke Wave',
+        description: 'Smooth progressive reveal tracking spoken words in real time.',
+        category: 'karaoke',
+        sampleWord: 'WORD-BY-WORD',
+        sampleSentence: 'Word-by-word active rhythm.',
+        bgPreviewClass: 'bg-[#121c27] border-[#274661]',
+        textPreviewClass: 'font-bold tracking-wide text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]',
+        highlightColor: '#22d3ee',
+        textColor: '#1b1821',
+        badgeText: 'Time Synced',
+        fontFamily: 'Nunito, sans-serif',
+        fontSize: 30,
+        letterSpacing: 1,
+        hasBgPill: true,
+        bgPillColor: '#f1df3c',
+        textShadow: 'none',
+    },
+    {
+        id: 'minimal',
+        name: 'Minimal Studio',
+        description: 'Quiet type and maximum legibility with elegant spacing.',
+        category: 'minimal',
+        sampleWord: 'Simplicity',
+        sampleSentence: 'Simplicity is the ultimate sophistication.',
+        bgPreviewClass: 'bg-[#131720] border-[#2b3548]',
+        textPreviewClass: 'font-medium tracking-wider text-slate-200',
+        highlightColor: '#94a3b8',
+        textColor: '#f1f5f9',
+        badgeText: 'Clean',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: 24,
+        letterSpacing: 1,
+        hasBgPill: true,
+        bgPillColor: 'rgba(9, 12, 18, 0.72)',
+        textShadow: 'none',
+    },
+    {
+        id: 'pop',
+        name: 'Comic Pop',
+        description: 'Playful bouncy scale with cheerful pastel color pops.',
+        category: 'punchy',
+        sampleWord: 'BOOM!',
+        sampleSentence: 'Level up your story with fun.',
+        bgPreviewClass: 'bg-[#22182b] border-[#5a3875]',
+        textPreviewClass: 'font-black -rotate-2 text-pink-400 drop-shadow-[2px_2px_0_#581c87]',
+        highlightColor: '#f472b6',
+        textColor: '#ffffff',
+        badgeText: 'Playful',
+        fontFamily: 'Nunito, cursive, sans-serif',
+        fontSize: 30,
+        letterSpacing: 0,
+        hasBgPill: true,
+        bgPillColor: '#f04b89',
+        textShadow: '2px 2px 0 #581c87',
+    },
+    {
+        id: 'cyber',
+        name: 'Cyberpunk Neon',
+        description: 'High-voltage electric magenta and turquoise glow.',
+        category: 'trending',
+        sampleWord: 'FUTURE',
+        sampleSentence: 'The future of video captioning.',
+        bgPreviewClass: 'bg-[#0f1825] border-[#294c6b]',
+        textPreviewClass: 'font-extrabold uppercase tracking-widest text-[#00f2fe] drop-shadow-[0_0_12px_#00f2fe]',
+        highlightColor: '#ff007f',
+        textColor: '#00f2fe',
+        badgeText: 'Neon Glow',
+        fontFamily: 'Consolas, monospace',
+        fontSize: 32,
+        letterSpacing: 3,
+        hasBgPill: true,
+        bgPillColor: 'rgba(0, 0, 0, 0.85)',
+        textShadow: '0 0 0.32em #00f2fe',
+    },
+    {
+        id: 'boxed',
+        name: 'Subtle Boxed Pill',
+        description: 'Translucent rounded backdrop pill for busy background footage.',
+        category: 'minimal',
+        sampleWord: 'Readability',
+        sampleSentence: 'Never miss a single word again.',
+        bgPreviewClass: 'bg-[#151c28] border-[#303f58]',
+        textPreviewClass: 'font-bold px-3 py-1 rounded-lg bg-black/60 backdrop-blur-sm text-white',
+        highlightColor: '#818cf8',
+        textColor: '#ffffff',
+        badgeText: 'Box Pill',
+        fontFamily: 'Nunito, sans-serif',
+        fontSize: 24,
+        letterSpacing: 1,
+        hasBgPill: true,
+        bgPillColor: 'rgba(0, 0, 0, 0.75)',
+        textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+    },
+    {
+        id: 'cinematic',
+        name: 'Cinematic Serif',
+        description: 'Film-grade classical typography with subtle letterbox poise.',
+        category: 'cinematic',
+        sampleWord: 'STORYTELLING',
+        sampleSentence: 'Captivating stories told with grace.',
+        bgPreviewClass: 'bg-[#17161b] border-[#44384a]',
+        textPreviewClass: 'font-serif italic tracking-widest text-[#f5ecd7] drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]',
+        highlightColor: '#f5ecd7',
+        textColor: '#f5ecd7',
+        badgeText: 'Film Grade',
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        fontSize: 28,
+        letterSpacing: 2,
+        hasBgPill: false,
+        textShadow: '0 0.07em 0.28em rgba(0,0,0,0.85)',
+    },
+    {
+        id: 'typewriter',
+        name: 'Retro Typewriter',
+        description: 'Monospace mechanical character cadence with nostalgic feel.',
+        category: 'minimal',
+        sampleWord: 'typing...',
+        sampleSentence: 'Authentic creator journal style.',
+        bgPreviewClass: 'bg-[#19191d] border-[#3d3d4a]',
+        textPreviewClass: 'font-mono text-emerald-400 tracking-tight',
+        highlightColor: '#34d399',
+        textColor: '#34d399',
+        badgeText: 'Monospace',
+        fontFamily: '"Courier New", Courier, monospace',
+        fontSize: 22,
+        letterSpacing: 0,
+        hasBgPill: true,
+        bgPillColor: 'rgba(0, 0, 0, 0.65)',
+        textShadow: 'none',
+    },
+];
+
+const CUSTOM_STYLES_STORAGE_KEY = 'textmotion_custom_styles';
+
+export function loadCustomStyles(): CaptionStyle[] {
+    try {
+        const raw = localStorage.getItem(CUSTOM_STYLES_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            return parsed.map((s) => ({...s, isCustom: true}));
+        }
+    } catch (e) {
+        console.warn('Failed to load custom styles from localStorage', e);
+    }
+    return [];
+}
+
+export function saveCustomStyles(styles: CaptionStyle[]): void {
+    try {
+        localStorage.setItem(CUSTOM_STYLES_STORAGE_KEY, JSON.stringify(styles));
+    } catch (e) {
+        console.warn('Failed to save custom styles to localStorage', e);
+    }
+}
+
+export function getAllStyles(customStyles?: CaptionStyle[]): CaptionStyle[] {
+    const custom = customStyles ?? loadCustomStyles();
+    return [...DEFAULT_STYLES, ...custom];
+}

@@ -1,5 +1,6 @@
 import {useState} from 'react';
 import type {CaptionStyle} from '../../models';
+import {DEFAULT_STYLES} from '../../captionStyles';
 import {CheckIcon, LayersIcon, SearchIcon, SparkleIcon, PlayCircleIcon, CloseIcon} from '../Icons';
 import {getCopy, type Language} from '../../i18n';
 
@@ -164,7 +165,9 @@ export function TemplatesView({language, onApplyTemplate}: Props) {
 
     const handleUseTemplate = (template: TemplateItem) => {
         setAppliedTemplateId(template.id);
+        const baseStyle = DEFAULT_STYLES.find(s => s.id === template.styleId) ?? DEFAULT_STYLES[0];
         const style: CaptionStyle = {
+            ...baseStyle,
             id: template.styleId,
             name: template.title,
             description: template.description,

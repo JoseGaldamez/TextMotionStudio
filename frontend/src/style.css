@@ -14,6 +14,9 @@
 }
 
 @font-face{font-family:"Nunito";font-style:normal;font-weight:300 900;font-display:swap;src:url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2")}
+:root, html {
+  color-scheme: dark;
+}
 html,body,#root{width:100%;height:100%;margin:0;overflow:hidden}
 html{background:#0d111a;color:#f5f7fa;font-family:"Nunito",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-synthesis:none;-webkit-font-smoothing:antialiased}
 body{min-width:1280px}
@@ -21,11 +24,65 @@ button,select,input{font:inherit}
 .window-drag{--wails-draggable:drag}
 .window-no-drag{--wails-draggable:no-drag}
 .workspace-grid{grid-template-rows:50px minmax(220px,var(--video-flex)) 16px minmax(160px,var(--timeline-flex))}
-.timeline-scroll{scrollbar-color:#52607c #151b27;scrollbar-width:thin}
-.timeline-scroll::-webkit-scrollbar{height:10px;width:10px}
-.timeline-scroll::-webkit-scrollbar-track{border-radius:8px;background:#151b27}
-.timeline-scroll::-webkit-scrollbar-thumb{border:2px solid #151b27;border-radius:8px;background:#52607c}
-.timeline-scroll::-webkit-scrollbar-thumb:hover{background:#7568ff}
+
+/* Global Studio Dark Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #313d54 transparent;
+}
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: #263146;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  transition: background-color .18s ease;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #435270;
+}
+*::-webkit-scrollbar-thumb:active {
+  background-color: #6657f5;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Timeline Custom Scrollbar */
+.timeline-scroll {
+  scrollbar-color: #3a4762 #121824;
+  scrollbar-width: thin;
+}
+.timeline-scroll::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.timeline-scroll::-webkit-scrollbar-track {
+  border-radius: 8px;
+  background: #121824;
+}
+.timeline-scroll::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  background-color: #35425c;
+  border: 1px solid #121824;
+}
+.timeline-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #516284;
+}
+.timeline-scroll::-webkit-scrollbar-thumb:active {
+  background-color: #6657f5;
+}
 
 .video-stage::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.022) 50%,transparent 65%);transform:translateX(-80%);animation:stage-sheen 7s ease-in-out infinite;pointer-events:none}
 .seek,.zoom{appearance:none}
@@ -35,5 +92,7 @@ button,select,input{font:inherit}
 .tick-line{background:repeating-linear-gradient(90deg,#354054 0 1px,transparent 1px 26px)}
 .film-frame::before{content:"";position:absolute;width:20px;height:29px;left:50%;bottom:-1px;transform:translateX(-50%);border-radius:12px 12px 0 0;background:#10151d}
 @keyframes stage-sheen{0%,55%{transform:translateX(-85%)}85%,100%{transform:translateX(85%)}}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.animate-shimmer{animation:shimmer 2s cubic-bezier(.4,0,.2,1) infinite}
 @media(max-height:820px){.workspace-grid{grid-template-rows:37px minmax(220px,var(--video-flex)) 10px minmax(160px,var(--timeline-flex))}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}

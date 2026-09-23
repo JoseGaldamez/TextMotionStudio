@@ -14,6 +14,7 @@ import {StylesView} from './components/views/StylesView';
 import {TemplatesView} from './components/views/TemplatesView';
 import {ExportView} from './components/views/ExportView';
 import {SettingsView} from './components/views/SettingsView';
+import {DEFAULT_STYLES, getAllStyles, loadCustomStyles, saveCustomStyles} from './captionStyles';
 
 const mockCaptions: Caption[] = [
     {id: 'c1', text: 'Great ideas', start: 0, end: 4.2},
@@ -22,14 +23,6 @@ const mockCaptions: Caption[] = [
     {id: 'c4', text: 'Make your videos', start: 11.4, end: 17.2},
     {id: 'c5', text: 'stand out', start: 17.2, end: 21.3},
     {id: 'c6', text: 'with TextMotion Studio.', start: 21.3, end: 28},
-];
-
-const styles: CaptionStyle[] = [
-    {id: 'modern', name: 'Modern', description: 'Clean, readable, and stylish'},
-    {id: 'bold', name: 'Bold', description: 'High-impact words with weight'},
-    {id: 'karaoke', name: 'Karaoke', description: 'Word-by-word color emphasis'},
-    {id: 'minimal', name: 'Minimal', description: 'Quiet type, maximum clarity'},
-    {id: 'pop', name: 'Pop', description: 'Playful scale and vivid color'},
 ];
 
 const defaultVideoFraction = 0.61;
@@ -48,12 +41,16 @@ function App() {
     const [configError, setConfigError] = useState('');
     const [loadAttempt, setLoadAttempt] = useState(0);
     const [activeNav, setActiveNav] = useState('Create');
-    const [project, setProject] = useState<VideoProject>({videoName: null, videoUrl: null, captions: mockCaptions, selectedStyle: styles[0], captionSize: 100, captionPosition: 0});
+    const [customStyles, setCustomStyles] = useState<CaptionStyle[]>(() => loadCustomStyles());
+    const allStyles = getAllStyles(customStyles);
+    const [project, setProject] = useState<VideoProject>({videoName: null, videoUrl: null, captions: mockCaptions, selectedStyle: DEFAULT_STYLES[0], captionSize: 100, captionPosition: 0});
     const [isGenerating, setIsGenerating] = useState(false);
     const [captionsReady, setCaptionsReady] = useState(false);
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [playbackTime, setPlaybackTime] = useState(0);
     const [videoDuration, setVideoDuration] = useState(0);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [playPauseRequest, setPlayPauseRequest] = useState(0);
     const [seekRequest, setSeekRequest] = useState<{time: number; id: number} | null>(null);
     const [videoFraction, setVideoFraction] = useState(defaultVideoFraction);
     const videoPanelRef = useRef<HTMLDivElement>(null);
@@ -97,7 +94,7 @@ function App() {
     };
 
     const generateCaptions = () => {
-        if (isGenerating) return;
+        if (isGenerating || !project.videoUrl) return;
         setIsGenerating(true);
         window.setTimeout(() => {setIsGenerating(false); setCaptionsReady(true);}, 900);
     };
@@ -130,6 +127,32 @@ function App() {
         }
     };
 
+    const handleSaveCustomStyle = (newStyle: CaptionStyle) => {
+        setCustomStyles(prev => {
+            const existingIndex = prev.findIndex(s => s.id === newStyle.id);
+            let updated: CaptionStyle[];
+            if (existingIndex >= 0) {
+                updated = [...prev];
+                updated[existingIndex] = newStyle;
+            } else {
+                updated = [newStyle, ...prev];
+            }
+            saveCustomStyles(updated);
+            return updated;
+        });
+    };
+
+    const handleDeleteCustomStyle = (styleId: string) => {
+        setCustomStyles(prev => {
+            const updated = prev.filter(s => s.id !== styleId);
+            saveCustomStyles(updated);
+            return updated;
+        });
+        if (project.selectedStyle.id === styleId) {
+            setProject(current => ({...current, selectedStyle: DEFAULT_STYLES[0]}));
+        }
+    };
+
     if (!appConfig) return <AppFrame><main className="grid h-full min-w-[1280px] place-items-center bg-background text-foreground">
         {configError ? <div className="text-center"><p className="mb-5 text-sm text-muted" role="alert">{configError}</p><button className="cursor-pointer rounded-[10px] bg-primary px-5 py-3 text-sm font-bold hover:bg-primary-hover" onClick={() => {setConfigError(''); setLoadAttempt(attempt => attempt + 1)}}>{copy.app.retry}</button></div> : <p className="text-sm text-muted">{copy.app.loading}</p>}
     </main></AppFrame>;
@@ -149,10 +172,10 @@ function App() {
 
             {activeNav === 'Create' && (
                 <>
-                    <WorkflowPanel project={project} styles={styles} captionsReady={captionsReady} isGenerating={isGenerating} language={language} onVideoSelect={selectVideo} onGenerate={generateCaptions} onStyleSelect={(selectedStyle) => setProject((current) => ({...current, selectedStyle}))} onCaptionSizeChange={(captionSize) => setProject((current) => ({...current, captionSize}))} onCaptionPositionChange={(captionPosition) => setProject((current) => ({...current, captionPosition}))}/>
+                    <WorkflowPanel project={project} styles={allStyles} captionsReady={captionsReady} isGenerating={isGenerating} language={language} onVideoSelect={selectVideo} onGenerate={generateCaptions} onStyleSelect={(selectedStyle) => setProject((current) => ({...current, selectedStyle}))} onCaptionSizeChange={(captionSize) => setProject((current) => ({...current, captionSize}))} onCaptionPositionChange={(captionPosition) => setProject((current) => ({...current, captionPosition}))}/>
                     <section className="workspace-grid grid min-h-0 min-w-0 overflow-hidden bg-[#0d121b] p-[18px] max-[1320px]:px-3" style={{'--video-flex': `${videoFraction}fr`, '--timeline-flex': `${1 - videoFraction}fr`} as CSSProperties} aria-label={copy.app.workspace}>
                         <header className="flex items-center justify-between px-1 text-xs text-[#7f899b]"><div className="flex min-w-0 items-center gap-2"><span className="size-[7px] rounded-full bg-[#41b882] shadow-[0_0_0_3px_rgba(65,184,130,.09)]" aria-hidden="true"/><span className="overflow-hidden text-ellipsis whitespace-nowrap">{project.videoName ?? copy.app.untitled}</span></div><p className="m-0">{copy.app.tagline}</p></header>
-                        <div ref={videoPanelRef} className="min-h-0"><VideoPreview videoUrl={project.videoUrl} captionStyle={project.selectedStyle.id} captionSize={project.captionSize} captionPosition={project.captionPosition} activeCaption={activeCaption} playbackTime={playbackTime} videoDuration={videoDuration} onPlaybackTimeChange={setPlaybackTime} onDurationChange={setVideoDuration} seekRequest={seekRequest} onSeek={seekTo} onVideoSelect={selectVideo} language={language}/></div>
+                        <div ref={videoPanelRef} className="min-h-0"><VideoPreview videoUrl={project.videoUrl} captionStyle={project.selectedStyle} captionSize={project.captionSize} captionPosition={project.captionPosition} activeCaption={activeCaption} playbackTime={playbackTime} videoDuration={videoDuration} playPauseRequest={playPauseRequest} onPlayingChange={setIsPlaying} onPlaybackTimeChange={setPlaybackTime} onDurationChange={setVideoDuration} seekRequest={seekRequest} onSeek={seekTo} onVideoSelect={selectVideo} language={language}/></div>
                         <div role="separator" tabIndex={0} aria-label={copy.app.resizePanels} aria-orientation="horizontal" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(videoFraction * 100)} className="group flex cursor-row-resize touch-none items-center justify-center focus-visible:outline-2 focus-visible:outline-highlight" onPointerDown={event => {
                             const videoHeight = videoPanelRef.current?.getBoundingClientRect().height ?? 0;
                             const timelineHeight = timelinePanelRef.current?.getBoundingClientRect().height ?? 0;
@@ -168,7 +191,7 @@ function App() {
                                 event.preventDefault();
                             }
                         }}><span className="h-1 w-12 rounded-full bg-[#354055] transition-colors group-hover:bg-primary group-focus-visible:bg-primary"/></div>
-                        <div ref={timelinePanelRef} className="min-h-0"><Timeline videoFile={videoFile} captions={captionsReady ? project.captions : []} activeCaptionId={activeCaption?.id ?? ''} currentTime={playbackTime} videoDuration={videoDuration} onSeek={seekTo} onCaptionSelect={(id) => {const caption = project.captions.find(item => item.id === id); if (caption) seekTo(caption.start)}} language={language}/></div>
+                        <div ref={timelinePanelRef} className="min-h-0"><Timeline videoFile={videoFile} captions={captionsReady ? project.captions : []} activeCaptionId={activeCaption?.id ?? ''} currentTime={playbackTime} videoDuration={videoDuration} isPlaying={isPlaying} onSeek={seekTo} onCaptionSelect={(id) => {const caption = project.captions.find(item => item.id === id); if (caption) seekTo(caption.start)}} onTogglePlay={() => setPlayPauseRequest(req => req + 1)} language={language}/></div>
                     </section>
                 </>
             )}
@@ -176,7 +199,10 @@ function App() {
             {activeNav === 'Styles' && (
                 <StylesView
                     project={project}
+                    styles={allStyles}
                     onSelectStyle={(selectedStyle) => setProject((current) => ({...current, selectedStyle}))}
+                    onSaveCustomStyle={handleSaveCustomStyle}
+                    onDeleteCustomStyle={handleDeleteCustomStyle}
                     language={language}
                     onNavigateToCreate={() => setActiveNav('Create')}
                 />
