@@ -18,6 +18,7 @@ import {TemplatesView} from './components/views/TemplatesView';
 import {ExportView} from './components/views/ExportView';
 import {SettingsView} from './components/views/SettingsView';
 import {DEFAULT_STYLES, getAllStyles, loadCustomStyles, saveCustomStyles} from './captionStyles';
+import {CaptionGenerationModal} from './components/CaptionGenerationModal';
 
 const defaultVideoFraction = 0.61;
 const minVideoHeight = 220;
@@ -53,6 +54,7 @@ function App() {
     const videoPanelRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const browserSelectionRef = useRef<{name: string; url: string} | null>(null);
+    const generationCancelRequestedRef = useRef(false);
     const timelinePanelRef = useRef<HTMLDivElement>(null);
     const resizeStartRef = useRef<{y: number; videoHeight: number; totalHeight: number} | null>(null);
     const language: Language = appConfig?.language === 'es' ? 'es' : 'en';
@@ -135,6 +137,7 @@ function App() {
     const generateCaptions = async () => {
         if (isGenerating) return;
         if (!project.videoPath) { setGenerationError("We couldn't access the local path for this video."); return; }
+        generationCancelRequestedRef.current = false;
         setIsGenerating(true);
         setGenerationError('');
         try {
@@ -145,8 +148,16 @@ function App() {
             setCaptionsReady(true);
         } catch (reason) {
             setCaptionsReady(false);
-            setGenerationError(String(reason));
-        } finally { setIsGenerating(false); }
+            if (!generationCancelRequestedRef.current) setGenerationError(String(reason));
+        } finally {
+            generationCancelRequestedRef.current = false;
+            setIsGenerating(false);
+        }
+    };
+
+    const cancelCaptionGeneration = () => {
+        generationCancelRequestedRef.current = true;
+        CancelCaptionGeneration();
     };
 
     const seekTo = (time: number) => {
@@ -230,7 +241,7 @@ function App() {
 
             {activeNav === 'Create' && (
                 <>
-                    <WorkflowPanel project={project} styles={allStyles} captionsReady={captionsReady} isGenerating={isGenerating} readyModelId={readyModelId} generationError={generationError} captionLanguage={captionLanguage} language={language} onChooseVideo={() => void chooseVideo()} onVideoSelect={selectBrowserVideo} onGenerate={() => void generateCaptions()} onCancel={CancelCaptionGeneration} onCaptionLanguageChange={setCaptionLanguage} onStyleSelect={(selectedStyle) => setProject((current) => ({...current, selectedStyle}))} onCaptionSizeChange={(captionSize) => setProject((current) => ({...current, captionSize}))} onCaptionPositionChange={(captionPosition) => setProject((current) => ({...current, captionPosition}))}/>
+                    <WorkflowPanel project={project} styles={allStyles} captionsReady={captionsReady} isGenerating={isGenerating} readyModelId={readyModelId} generationError={generationError} captionLanguage={captionLanguage} language={language} onChooseVideo={() => void chooseVideo()} onVideoSelect={selectBrowserVideo} onGenerate={() => void generateCaptions()} onCancel={cancelCaptionGeneration} onCaptionLanguageChange={setCaptionLanguage} onStyleSelect={(selectedStyle) => setProject((current) => ({...current, selectedStyle}))} onCaptionSizeChange={(captionSize) => setProject((current) => ({...current, captionSize}))} onCaptionPositionChange={(captionPosition) => setProject((current) => ({...current, captionPosition}))}/>
                     <section className="workspace-grid grid min-h-0 min-w-0 overflow-hidden bg-[#0d121b] p-[18px] max-[1320px]:px-3" style={{'--video-flex': `${videoFraction}fr`, '--timeline-flex': `${1 - videoFraction}fr`} as CSSProperties} aria-label={copy.app.workspace}>
                         <header className="relative z-20 flex min-w-0 items-center justify-between gap-4 px-1 text-xs text-[#7f899b]"><div className="flex min-w-0 items-center gap-2"><span className="size-[7px] shrink-0 rounded-full bg-[#41b882] shadow-[0_0_0_3px_rgba(65,184,130,.09)]" aria-hidden="true"/><span className="overflow-hidden text-ellipsis whitespace-nowrap">{project.videoName ?? copy.app.untitled}</span></div><ModelSelector language={language} isGenerating={isGenerating} onReadyModelChange={setReadyModelId}/></header>
                         <div ref={videoPanelRef} className="min-h-0"><VideoPreview videoUrl={project.videoUrl} captions={captionsReady ? project.captions : []} captionStyle={project.selectedStyle} captionSize={project.captionSize} captionPosition={project.captionPosition} playbackTime={playbackTime} videoDuration={videoDuration} playPauseRequest={playPauseRequest} onPlayingChange={setIsPlaying} onPlaybackTimeChange={setPlaybackTime} onDurationChange={setVideoDuration} seekRequest={seekRequest} onSeek={seekTo} onChooseVideo={() => void chooseVideo()} onVideoSelect={selectBrowserVideo} language={language}/></div>
@@ -291,6 +302,7 @@ function App() {
                     onLanguageChange={handleLanguageChange}
                 />
             )}
+            {isGenerating && <CaptionGenerationModal language={language} onCancel={cancelCaptionGeneration}/>} 
         </main></AppFrame>
     );
 }
