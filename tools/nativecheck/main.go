@@ -21,7 +21,14 @@ func main() {
 	notices := flag.String("notices", "THIRD_PARTY_NOTICES.txt", "third-party notices file")
 	report := flag.String("report", "", "optional validation report path")
 	candidate := flag.Bool("candidate", false, "record candidate hashes/config; do not approve for release")
+	variant := flag.String("variant", "cpu", "native variant: cpu or gpu")
 	flag.Parse()
+	if *variant != "cpu" && *variant != "gpu" {
+		fail("unsupported native variant: " + *variant)
+	}
+	if *variant == "gpu" && *target != "windows-amd64" {
+		fail("GPU variant currently supports windows-amd64 only")
+	}
 	if flag.NArg() != 0 {
 		fail("use flags; example: go run ./tools/nativecheck -target windows-amd64 -dir <native-directory>")
 	}
@@ -73,6 +80,16 @@ func main() {
 		}
 	}
 	hashes := nativeHashes(*dir, ext)
+	if *variant == "gpu" {
+		for _, backend := range []string{"cpu", "vulkan", "cuda"} {
+			if !hasDLL(*dir, "ggml-"+backend) {
+				fail("GPU bundle is missing ggml-" + backend + " backend")
+			}
+		}
+		if info, err := os.Stat(filepath.Join(*dir, "CUDA_EULA.txt")); err != nil || info.IsDir() {
+			fail("GPU bundle is missing CUDA_EULA.txt")
+		}
+	}
 	if *candidate {
 		write(filepath.Join(*dir, "SHA256SUMS"), hashes)
 		write(filepath.Join(*dir, "build-config.txt"), strings.TrimSpace(buildconf)+"\n")
@@ -81,7 +98,11 @@ func main() {
 		if strings.TrimSpace(buildconf) != read(filepath.Join(*metadata, "ffmpeg", "build-config-"+*target+".txt")) {
 			fail("FFmpeg -buildconf differs from the approved configuration")
 		}
-		if strings.TrimSpace(hashes) != read(filepath.Join(*metadata, "approved", *target+".sha256")) {
+		approval := *target
+		if *variant == "gpu" {
+			approval += "-gpu"
+		}
+		if strings.TrimSpace(hashes) != read(filepath.Join(*metadata, "approved", approval+".sha256")) {
 			fail("native binary SHA-256 differs from the approved manifest")
 		}
 		if strings.TrimSpace(hashes) != read(filepath.Join(*dir, "SHA256SUMS")) {
@@ -92,6 +113,20 @@ func main() {
 	if *report != "" {
 		write(*report, "FFmpeg -version\n"+version+"\nFFmpeg -buildconf\n"+buildconf+"\nwhisper-cli --version\n"+whisperVersion+"\nSHA256SUMS\n"+hashes)
 	}
+}
+
+func hasDLL(dir, prefix string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		fail(err.Error())
+	}
+	for _, entry := range entries {
+		name := strings.ToLower(entry.Name())
+		if !entry.IsDir() && strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".dll") {
+			return true
+		}
+	}
+	return false
 }
 
 func nativeHashes(dir, ext string) string {

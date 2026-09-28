@@ -37,7 +37,7 @@ func (s *Service) emitProgress(stage string) {
 	}
 }
 
-func (s *Service) Generate(ctx context.Context, video, model, modelID, language string) (Result, error) {
+func (s *Service) Generate(ctx context.Context, video, model, modelID, language, device string) (Result, error) {
 	if language != "auto" && language != "en" && language != "es" {
 		language = "auto"
 	}
@@ -67,6 +67,9 @@ func (s *Service) Generate(ctx context.Context, video, model, modelID, language 
 	s.emitProgress("transcribing")
 	base := filepath.Join(temp, "transcription")
 	args := []string{"-m", model, "-f", audio, "--language", language, "--max-len", "1", "--split-on-word", "--output-json-full", "--output-file", base}
+	if device == "cpu" {
+		args = append(args, "--no-gpu")
+	}
 	started := time.Now()
 	cmd := exec.CommandContext(ctx, whisper, args...)
 	var stderr bytes.Buffer
@@ -84,7 +87,7 @@ func (s *Service) Generate(ctx context.Context, video, model, modelID, language 
 		return Result{}, ErrNoSpeech
 	}
 	groups := BuildCaptionGroups(words, DefaultMaxWordGap)
-	log.Printf("captions generated model=%s requested_language=%s detected_language=%s audio_duration=%.2fs transcription_duration=%s words=%d groups=%d", modelID, language, detected, audioDuration, time.Since(started), len(words), len(groups))
+	log.Printf("captions generated model=%s device=%s requested_language=%s detected_language=%s audio_duration=%.2fs transcription_duration=%s words=%d groups=%d", modelID, device, language, detected, audioDuration, time.Since(started), len(words), len(groups))
 	result := Result{Language: language, Model: modelID, Words: words, CaptionGroups: groups}
 	if language == "auto" {
 		result.Language, result.DetectedLanguage = detected, detected

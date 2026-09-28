@@ -37,6 +37,30 @@ only KERNEL32.dll and ADVAPI32.dll imports. The old locally staged Windows
 candidate is **also not approved as a complete release bundle** until paired
 with the controlled FFmpeg build and tested in the installer.
 
+### Optional Windows CUDA + Vulkan build
+
+`scripts/native/build-whisper-gpu-windows.ps1` builds the same pinned source
+with dynamically loaded CPU, CUDA and Vulkan backends. Supply a Windows CUDA
+Toolkit, Vulkan SDK, and the EULA file accompanying that CUDA Toolkit. The
+script copies only CUDA DLLs found in the binary import tree and rejects
+unresolved imports. The NVIDIA graphics driver and Vulkan driver remain
+system dependencies. Neither development SDK is included in the installer.
+
+The script combines the GPU build with the already approved FFmpeg executable
+from `build/bin/bin/windows-amd64/` and writes
+`build/bin/native-candidates/windows-amd64-gpu/`. Review its source archive,
+DLL_IMPORTS.txt, CMake cache, CUDA EULA and SHA256SUMS. After testing on NVIDIA,
+Vulkan-only and CPU-only systems, approve the exact hashes as
+`third_party/approved/windows-amd64-gpu.sha256`. Package with
+`scripts/package-windows.ps1 -NativeDirectory <candidate> -Variant gpu`.
+The release checker refuses a GPU installer until that approval file exists.
+The existing CPU release process and approval remain separate.
+
+Settings persist an Auto/CPU choice. Auto lets whisper.cpp select CUDA, then
+Vulkan, then CPU according to available backend devices. CPU passes
+`--no-gpu` to the transcription process. This setting does not affect FFmpeg
+video export.
+
 ## Models
 
 OpenAI Whisper models (MIT) are downloaded from Hugging Face during onboarding

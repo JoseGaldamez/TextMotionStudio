@@ -4,7 +4,7 @@ import type {CaptionStyle, VideoProject} from '../models';
 import {CheckIcon, ChevronIcon, ExportIcon, SparkleIcon, VideoIcon} from './Icons';
 import {getCopy, type Language} from '../i18n';
 
-interface Props {project: VideoProject; styles: CaptionStyle[]; captionsReady: boolean; isGenerating: boolean; readyModelId: string | null; generationError: string; captionLanguage: string; language: Language; onChooseVideo: () => void; onVideoSelect: (file: File) => void; onGenerate: () => void; onCancel: () => void; onCaptionLanguageChange: (language: string) => void; onStyleSelect: (style: CaptionStyle) => void; onCaptionSizeChange: (size: number) => void; onCaptionPositionChange: (position: number) => void;}
+interface Props {project: VideoProject; styles: CaptionStyle[]; captionsReady: boolean; isGenerating: boolean; readyModelId: string | null; generationError: string; captionLanguage: string; language: Language; onChooseVideo: () => void; onVideoSelect: (file: File) => void; onGenerate: () => void; onCancel: () => void; onCaptionLanguageChange: (language: string) => void; onStyleSelect: (style: CaptionStyle) => void; onCaptionSizeChange: (size: number) => void; onCaptionPositionChange: (position: number) => void; onExport: () => void;}
 
 const stepClass = 'relative pb-[26px] mb-[26px] border-b border-[#21293a] [@media(max-height:820px)]:pb-[18px] [@media(max-height:820px)]:mb-[18px]';
 const headingClass = 'mb-[14px] flex items-center gap-2.5 text-[17px] font-bold tracking-[-.01em]';
@@ -68,7 +68,7 @@ function ResetButton({
     );
 }
 
-export function WorkflowPanel({project, styles, captionsReady, isGenerating, readyModelId, generationError, captionLanguage, language, onChooseVideo, onVideoSelect, onGenerate, onCancel, onCaptionLanguageChange, onStyleSelect, onCaptionSizeChange, onCaptionPositionChange}: Props) {
+export function WorkflowPanel({project, styles, captionsReady, isGenerating, readyModelId, generationError, captionLanguage, language, onChooseVideo, onVideoSelect, onGenerate, onCancel, onCaptionLanguageChange, onStyleSelect, onCaptionSizeChange, onCaptionPositionChange, onExport}: Props) {
     const copy = getCopy(language).workflow;
     const stylesById = (getCopy(language) as unknown as {stylesById?: Record<string, {name: string; description: string}>}).stylesById;
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -291,6 +291,7 @@ export function WorkflowPanel({project, styles, captionsReady, isGenerating, rea
                         : 'border border-[#38465d] bg-[#1d2638] text-white hover:bg-[#26334a] cursor-pointer'
                 }`}
                 disabled={step4Status === 'locked'}
+                onClick={onExport}
             >
                 <ExportIcon/> {copy.exportVideo}
             </button>

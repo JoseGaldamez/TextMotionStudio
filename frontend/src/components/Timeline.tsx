@@ -14,6 +14,7 @@ interface Props {
     isPlaying?: boolean;
     onSeek: (time: number) => void;
     onCaptionSelect: (id: string) => void;
+    onCaptionEdit: (id: string, words: string[]) => void;
     onTogglePlay?: () => void;
     language: Language;
 }
@@ -29,6 +30,52 @@ const analysisCache = new Map<string, AudioAnalysis>();
 const zoomCache = new Map<string, number>();
 
 const formatTime = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+
+function CaptionEditDialog({caption, language, onSave, onClose}: {caption: Caption; language: Language; onSave: (words: string[]) => void; onClose: () => void}) {
+    const copy = getCopy(language).timeline;
+    const dialogRef = useRef<HTMLDialogElement>(null);
+    const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+    const [words, setWords] = useState(() => caption.words.map(word => word.text));
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const dialog = dialogRef.current;
+        dialog?.showModal();
+        return () => {if (dialog?.open) dialog.close()};
+    }, []);
+
+    const save = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const updated = words.map(word => word.trim());
+        const invalid = updated.findIndex(word => !word || /\s/.test(word));
+        if (invalid >= 0) {
+            setError(copy.wordError);
+            inputRefs.current[invalid]?.focus();
+            return;
+        }
+        onSave(updated);
+    };
+
+    return <dialog ref={dialogRef} onCancel={event => {event.preventDefault(); onClose()}} onClick={event => {if (event.target === event.currentTarget) onClose()}} aria-labelledby="caption-edit-title" className="w-[min(520px,calc(100vw-32px))] max-h-[calc(100vh-32px)] rounded-2xl border border-[#354058] bg-[#151b28] p-0 text-white shadow-[0_24px_70px_rgba(0,0,0,.55)] backdrop:bg-black/75">
+        <form onSubmit={save} className="flex max-h-[calc(100vh-32px)] flex-col">
+            <div className="border-b border-[#2a3548] px-6 py-5">
+                <h2 id="caption-edit-title" className="text-xl font-bold">{copy.editCaption}</h2>
+                <p className="mt-1 text-sm text-[#b8c5d8]">{formatTime(caption.start)} – {formatTime(caption.end)} · {copy.timingUnchanged}</p>
+            </div>
+            <div className="min-h-0 space-y-3 overflow-y-auto px-6 py-5">
+                {words.map((word, index) => <label key={caption.words[index].id} className="block text-xs font-semibold text-[#c8d2e2]">
+                    {copy.word} {index + 1}
+                    <input ref={element => {inputRefs.current[index] = element}} type="text" value={word} onChange={event => {const next = [...words]; next[index] = event.target.value; setWords(next); setError('')}} autoFocus={index === 0} className="mt-1.5 block h-10 w-full rounded-lg border border-[#3a4860] bg-[#0d1420] px-3 text-sm font-medium text-white outline-none focus:border-[#958aff] focus:ring-2 focus:ring-[#958aff]/25"/>
+                </label>)}
+                {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
+            </div>
+            <div className="flex justify-end gap-3 border-t border-[#2a3548] px-6 py-4">
+                <button type="button" onClick={onClose} className="rounded-lg border border-[#3a4860] px-4 py-2 text-sm font-semibold text-[#d3dbea] hover:bg-[#222c3d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#958aff]">{copy.cancelEdit}</button>
+                <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#958aff]">{copy.saveEdit}</button>
+            </div>
+        </form>
+    </dialog>;
+}
 
 function extractWaveform(audio: AudioBuffer): number[] {
     const ch0 = audio.getChannelData(0);
@@ -245,10 +292,12 @@ function WaveformSkeleton({captionsCount, label}: {captionsCount: number; label:
     );
 }
 
-export function Timeline({videoUrl, videoFile, captions, isGenerating, activeCaptionId, currentTime, videoDuration, onSeek, onCaptionSelect, onTogglePlay, language}: Props) {
+export function Timeline({videoUrl, videoFile, captions, isGenerating, activeCaptionId, currentTime, videoDuration, onSeek, onCaptionSelect, onCaptionEdit, onTogglePlay, language}: Props) {
     const copy = getCopy(language).timeline;
     const fileKey = videoUrl ?? '';
     const [showWaveform, setShowWaveform] = useState(true);
+    const [editingCaptionId, setEditingCaptionId] = useState<string | null>(null);
+    const editingCaption = captions.find(caption => caption.id === editingCaptionId);
     const [zoom, setZoomState] = useState(() => (fileKey ? zoomCache.get(fileKey) ?? 0 : 0));
     const [analysis, setAnalysis] = useState<AudioAnalysis | null>(() => {
         if (!fileKey) return null;
@@ -435,6 +484,7 @@ export function Timeline({videoUrl, videoFile, captions, isGenerating, activeCap
     const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
         if (event.code === 'Space' || event.key === ' ') {
             const target = event.target as HTMLElement;
+            if (target.closest('dialog')) return;
             const isTextInput = target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'text';
             if (isTextInput) return;
             event.preventDefault();
@@ -447,7 +497,7 @@ export function Timeline({videoUrl, videoFile, captions, isGenerating, activeCap
         ref={sectionRef}
         tabIndex={0}
         onPointerDown={event => {
-            if (document.activeElement !== event.currentTarget && !(event.target as HTMLElement).closest('button, input, select')) {
+            if (document.activeElement !== event.currentTarget && !(event.target as HTMLElement).closest('button, input, select, dialog')) {
                 event.currentTarget.focus();
             }
         }}
@@ -493,7 +543,7 @@ export function Timeline({videoUrl, videoFile, captions, isGenerating, activeCap
                     {duration > 0 && captions.length > 0 && <div className="relative h-12">{captions.filter(caption => caption.start < duration && caption.end > 0).map(caption => {
                         const start = Math.max(0, caption.start);
                         const end = Math.min(duration, caption.end);
-                        return <button key={caption.id} data-caption type="button" className={`absolute top-0 h-12 min-w-[20px] cursor-pointer overflow-hidden rounded-[9px] border px-2 text-ellipsis whitespace-nowrap text-[11px] font-semibold text-[#e3e7ee] hover:bg-[#252e40] ${activeCaptionId === caption.id ? 'border-[#7669ff] bg-[#5f52e7] shadow-[0_7px_17px_rgba(72,57,206,.22)]' : 'border-transparent bg-[#1d2533]'}`} style={{left: `${start / duration * 100}%`, width: `${(end - start) / duration * 100}%`}} onClick={() => onCaptionSelect(caption.id)}>{caption.text}</button>;
+                        return <button key={caption.id} data-caption type="button" title={copy.editHint} aria-label={`${copy.editCaption}: ${caption.text}`} className={`absolute top-0 h-12 min-w-[20px] cursor-pointer overflow-hidden rounded-[9px] border px-2 text-ellipsis whitespace-nowrap text-[11px] font-semibold text-[#e3e7ee] hover:bg-[#252e40] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a69cff] ${activeCaptionId === caption.id ? 'border-[#7669ff] bg-[#5f52e7] shadow-[0_7px_17px_rgba(72,57,206,.22)]' : 'border-transparent bg-[#1d2533]'}`} style={{left: `${start / duration * 100}%`, width: `${(end - start) / duration * 100}%`}} onClick={() => onCaptionSelect(caption.id)} onDoubleClick={() => {if (caption.words.length) setEditingCaptionId(caption.id)}} onKeyDown={event => {if (event.key === 'Enter' || event.key === 'F2') {event.preventDefault(); event.stopPropagation(); if (caption.words.length) setEditingCaptionId(caption.id)}}}>{caption.text}</button>;
                     })}</div>}
                     {isGenerating && <div className="relative flex h-12 items-center gap-1.5 overflow-hidden" aria-hidden="true">
                         {[16, 12, 21, 14, 18, 11].map((width, index) => (
@@ -520,5 +570,6 @@ export function Timeline({videoUrl, videoFile, captions, isGenerating, activeCap
                 </div>
             </>}
         </div>
+        {editingCaption && <CaptionEditDialog key={editingCaption.id} caption={editingCaption} language={language} onClose={() => setEditingCaptionId(null)} onSave={words => {onCaptionEdit(editingCaption.id, words); setEditingCaptionId(null)}}/>}
     </section>;
 }

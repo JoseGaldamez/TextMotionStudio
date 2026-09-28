@@ -1,4 +1,4 @@
-import {Download, LayoutTemplate, Palette, Settings, ShieldCheck, Video} from 'lucide-react';
+import {Download, Palette, Settings, ShieldCheck, Video} from 'lucide-react';
 import logotype from '../assets/images/textmotion-logotipo.png';
 import {getCopy, type Language} from '../i18n';
 
@@ -13,7 +13,6 @@ export function Sidebar({activeItem, onSelect, language}: Props) {
     const navItems = [
         {id: 'Create', label: copy.create, icon: Video},
         {id: 'Styles', label: copy.styles, icon: Palette},
-        {id: 'Templates', label: copy.templates, icon: LayoutTemplate},
         {id: 'Export', label: copy.export, icon: Download},
     ];
 

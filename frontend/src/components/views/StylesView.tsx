@@ -1,5 +1,6 @@
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useRef} from 'react';
 import type {CaptionStyle, VideoProject} from '../../models';
+import {drawCaption} from '../../captionCanvas';
 import {getCopy, type Language} from '../../i18n';
 import {Check, Search, Sliders, Trash2, Plus, ArrowRight} from 'lucide-react';
 
@@ -32,6 +33,30 @@ const CATEGORIES = [
     {id: 'cinematic', key: 'cinematic'},
 ] as const;
 
+function StyleSample({style, language}: {style: CaptionStyle; language: Language}) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    useEffect(() => {
+        let canceled = false;
+        const draw = () => {
+            const canvas = canvasRef.current;
+            const context = canvas?.getContext('2d');
+            if (!canvas || !context) return;
+            const sample = style.sampleWord ?? (language === 'es' ? 'TU HISTORIA IMPORTA' : 'YOUR STORY MATTERS');
+            const words = sample.split(/\s+/).filter(Boolean).slice(0, 4).map((text, index) => ({id: String(index), text, start: index, end: index + 1}));
+            drawCaption(context, {
+                caption: {id: 'sample', start: 0, end: words.length, text: sample, words},
+                activeWordID: words[Math.min(1, words.length - 1)]?.id ?? '',
+                visibleWordCount: style.revealMode === 'all' || !style.revealMode ? words.length : Math.min(2, words.length),
+                style, size: 100, position: 50, width: canvas.width, height: canvas.height,
+            });
+        };
+        draw();
+        void document.fonts.load('800 48px Nunito').then(() => {if (!canceled) draw()});
+        return () => {canceled = true};
+    }, [style, language]);
+    return <canvas ref={canvasRef} width={640} height={220} className="h-full w-full object-contain" aria-hidden="true"/>;
+}
+
 export function StylesView({
     project,
     styles,
@@ -58,6 +83,7 @@ export function StylesView({
     const [hasBgPill, setHasBgPill] = useState(false);
     const [bgPillColor, setBgPillColor] = useState('rgba(15, 23, 42, 0.85)');
     const [textShadow, setTextShadow] = useState('none');
+    const [revealMode, setRevealMode] = useState<NonNullable<CaptionStyle['revealMode']>>('all');
     const [savedNotice, setSavedNotice] = useState('');
 
     const activeCustomStyle = styles.find(s => s.id === selectedStyleId) ?? styles[0];
@@ -75,6 +101,7 @@ export function StylesView({
         setHasBgPill(Boolean(activeCustomStyle.hasBgPill));
         setBgPillColor(activeCustomStyle.bgPillColor ?? 'rgba(15, 23, 42, 0.85)');
         setTextShadow(activeCustomStyle.textShadow ?? 'none');
+        setRevealMode(activeCustomStyle.revealMode ?? 'all');
     }, [selectedStyleId, activeCustomStyle, stylesById]);
 
     const customStylesCount = styles.filter(s => s.isCustom).length;
@@ -115,6 +142,7 @@ export function StylesView({
             hasBgPill,
             bgPillColor,
             textShadow,
+            revealMode,
         };
         onSelectStyle(styleToApply);
         if (activeCustomStyle.isCustom) {
@@ -144,6 +172,7 @@ export function StylesView({
             hasBgPill,
             bgPillColor,
             textShadow,
+            revealMode,
             isCustom: true,
             createdAt: Date.now(),
         };
@@ -173,6 +202,7 @@ export function StylesView({
         Boolean(project.selectedStyle.hasBgPill) === hasBgPill &&
         (project.selectedStyle.bgPillColor ?? 'rgba(15, 23, 42, 0.85)') === bgPillColor &&
         (project.selectedStyle.textShadow ?? 'none') === textShadow &&
+        (project.selectedStyle.revealMode ?? 'all') === revealMode &&
         (project.selectedStyle.letterSpacing ?? 1) === letterSpacing;
 
     return (
@@ -300,40 +330,11 @@ export function StylesView({
                                 </div>
 
                                 {/* Preview Canvas Box */}
-                                <div
-                                    className="relative flex h-24 w-full items-center justify-center overflow-hidden rounded-lg border border-[#1b2332] bg-[#090d14] p-3 text-center"
-                                    style={{fontFamily: style.fontFamily}}
-                                >
-                                    <p
-                                        className={`relative z-1 text-sm font-bold ${style.textPreviewClass ?? ''}`}
-                                        style={{
-                                            color: style.textColor ?? '#ffffff',
-                                            backgroundColor: style.hasBgPill ? (style.bgPillColor ?? 'rgba(0,0,0,0.75)') : 'transparent',
-                                            padding: style.hasBgPill ? '0.2em 0.5em' : undefined,
-                                            borderRadius: style.hasBgPill ? '0.3em' : undefined,
-                                            textShadow: style.textShadow && style.textShadow !== 'none' ? style.textShadow : undefined,
-                                            letterSpacing: style.letterSpacing ? `${style.letterSpacing}px` : undefined,
-                                            fontWeight: style.fontFamily?.includes('Impact') ? 900 : 700,
-                                        }}
-                                    >
-                                        {(() => {
-                                            const sample = style.sampleWord ?? 'SAMPLE';
-                                            const words = sample.split(' ');
-                                            if (words.length > 1) {
-                                                return (
-                                                    <>
-                                                        <span style={{color: style.highlightColor ?? '#8a7dff'}}>{words[0]}</span>{' '}
-                                                        <span>{words.slice(1).join(' ')}</span>
-                                                    </>
-                                                );
-                                            }
-                                            return (
-                                                <span style={{color: style.highlightColor ?? style.textColor ?? '#ffffff'}}>
-                                                    {sample}
-                                                </span>
-                                            );
-                                        })()}
-                                    </p>
+                                <div className="relative h-28 w-full overflow-hidden rounded-lg bg-[radial-gradient(ellipse_at_center,#303847_0%,#151b25_55%,#090d14_100%)]">
+                                    <StyleSample style={style} language={language}/>
+                                    <span className="absolute bottom-2 left-2 rounded-md bg-black/75 px-2 py-1 text-[10px] font-semibold text-white">
+                                        {style.revealMode === 'single' ? copy.revealSingle : style.revealMode === 'progressive' ? copy.revealProgressive : copy.revealAll}
+                                    </span>
                                 </div>
 
                                 {/* Typography & Meta Info */}
@@ -378,29 +379,8 @@ export function StylesView({
                     <span className="mb-2 block text-[10px] font-semibold text-[#66758a] uppercase tracking-wider">
                         {language === 'es' ? 'Vista Previa en Vivo' : 'Live Preview'}
                     </span>
-                    <div
-                        className="flex min-h-[85px] items-center justify-center rounded-lg bg-[#05080e] p-3 transition-all"
-                        style={{fontFamily}}
-                    >
-                        <p
-                            className="inline-block transition-all"
-                            style={{
-                                fontSize: `${fontSize}px`,
-                                letterSpacing: `${letterSpacing}px`,
-                                color: textColor,
-                                backgroundColor: hasBgPill ? bgPillColor : 'transparent',
-                                padding: hasBgPill ? '0.25em 0.5em' : '0',
-                                borderRadius: hasBgPill ? '0.35em' : '0',
-                                textShadow: textShadow === 'none' ? undefined : textShadow,
-                                fontFamily,
-                                fontWeight: fontFamily.includes('Impact') ? 900 : 700,
-                            }}
-                        >
-                            <span style={{color: highlightColor}}>
-                                {copy.previewSample.split(' ')[0]}
-                            </span>{' '}
-                            {copy.previewSample.split(' ').slice(1).join(' ')}
-                        </p>
+                    <div className="h-28 overflow-hidden rounded-lg bg-[radial-gradient(ellipse_at_center,#303847_0%,#151b25_55%,#090d14_100%)]">
+                        <StyleSample style={{...activeCustomStyle, fontSize, letterSpacing, textColor, highlightColor, fontFamily, hasBgPill, bgPillColor, textShadow, revealMode}} language={language}/>
                     </div>
                     <span className="mt-2 block text-[10px] text-[#5e6d82]">
                         Base: <strong>{stylesById?.[activeCustomStyle.id]?.name ?? activeCustomStyle.name}</strong>
@@ -526,6 +506,14 @@ export function StylesView({
                             {copy.animation ?? 'Efectos & Caja'}
                         </label>
                         <div className="mt-2 space-y-2.5">
+                            <div>
+                                <label htmlFor="style-reveal-mode" className="mb-1 block text-[11px] text-[#aebbd0]">{copy.revealMode}</label>
+                                <select id="style-reveal-mode" value={revealMode} onChange={e => setRevealMode(e.target.value as NonNullable<CaptionStyle['revealMode']>)} className="h-9 w-full cursor-pointer rounded-lg border border-[#344158] bg-[#111a29] px-2 text-xs text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#958aff]">
+                                    <option value="all">{copy.revealAll}</option>
+                                    <option value="progressive">{copy.revealProgressive}</option>
+                                    <option value="single">{copy.revealSingle}</option>
+                                </select>
+                            </div>
                             <div>
                                 <span className="mb-1 block text-[11px] text-[#718096]">{copy.shadowEffect ?? 'Efecto de Sombra'}</span>
                                 <select

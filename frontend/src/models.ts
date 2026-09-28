@@ -6,6 +6,7 @@ export interface CaptionStyle {
     name: string;
     description: string;
     category?: 'trending' | 'punchy' | 'minimal' | 'karaoke' | 'cinematic' | 'custom';
+    revealMode?: 'all' | 'progressive' | 'single';
     sampleWord?: string;
     sampleSentence?: string;
     bgPreviewClass?: string;

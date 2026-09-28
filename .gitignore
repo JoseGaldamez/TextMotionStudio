@@ -1,4 +1,5 @@
 build/bin
+build/gpu-whisper/
 node_modules
 frontend/dist
 build/windows/installer/runtime/

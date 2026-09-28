@@ -55,3 +55,10 @@ Complete LGPL 2.1 text: FFMPEG_LICENSE.txt, installed beside this file.
 Corresponding source and exact build configuration must be published before
 commercial release. Planned source page (not yet live):
 https://textmotionstudio.com/opensource/ffmpeg
+
+Optional NVIDIA CUDA transcription backend (Windows GPU build only)
+CUDA Toolkit runtime libraries are distributed under the NVIDIA Software
+License Agreement and CUDA Toolkit Supplement. The exact bundled libraries
+are identified by the GPU candidate's SHA256SUMS and DLL_IMPORTS.txt.
+License terms and applicable third-party notices: CUDA_EULA.txt, installed
+with the GPU build. https://docs.nvidia.com/cuda/eula/index.html

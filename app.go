@@ -28,6 +28,8 @@ type App struct {
 	generationCancel context.CancelFunc
 	videoMu          sync.RWMutex
 	videos           map[string]string
+	exportMu         sync.Mutex
+	exportJob        *videoExportJob
 }
 
 // NewApp creates a new App application struct
@@ -158,7 +160,11 @@ func (a *App) GenerateCaptions(videoPath, language string) (transcription.Result
 	a.generationCancel = cancel
 	a.generationMu.Unlock()
 	defer func() { a.generationMu.Lock(); a.generationCancel = nil; a.generationMu.Unlock(); cancel() }()
-	result, err := a.transcriber.Generate(ctx, videoPath, modelPath, modelID, language)
+	settings, err := config.Load()
+	if err != nil {
+		return transcription.Result{}, err
+	}
+	result, err := a.transcriber.Generate(ctx, videoPath, modelPath, modelID, language, settings.TranscriptionDevice)
 	if err != nil {
 		stage := "error"
 		if errors.Is(err, context.Canceled) {
@@ -194,6 +200,21 @@ func (a *App) UpdateAppConfig(onboardingCompleted bool, language string) (config
 		return config.AppConfig{}, err
 	}
 	value.OnboardingCompleted, value.Language = onboardingCompleted, language
+	if err := config.Save(value); err != nil {
+		return config.AppConfig{}, err
+	}
+	return config.Load()
+}
+
+func (a *App) UpdateTranscriptionDevice(device string) (config.AppConfig, error) {
+	if device != "auto" && device != "cpu" {
+		return config.AppConfig{}, errors.New("Invalid transcription device.")
+	}
+	value, err := config.Load()
+	if err != nil {
+		return config.AppConfig{}, err
+	}
+	value.TranscriptionDevice = device
 	if err := config.Save(value); err != nil {
 		return config.AppConfig{}, err
 	}

@@ -15,6 +15,14 @@ type AppConfig struct {
 	OnboardingCompleted bool   `json:"onboardingCompleted"`
 	SelectedModel       string `json:"selectedModel,omitempty"`
 	Language            string `json:"language"`
+	TranscriptionDevice string `json:"transcriptionDevice,omitempty"`
+}
+
+func normalizeDevice(device string) string {
+	if device == "cpu" {
+		return "cpu"
+	}
+	return "auto"
 }
 
 func normalizeLanguage(language string) string {
@@ -48,7 +56,7 @@ func Load() (AppConfig, error) {
 	}
 	data, err := os.ReadFile(filePath)
 	if errors.Is(err, os.ErrNotExist) {
-		return AppConfig{Language: "en"}, nil
+		return AppConfig{Language: "en", TranscriptionDevice: "auto"}, nil
 	}
 	if err != nil {
 		return AppConfig{}, err
@@ -58,12 +66,14 @@ func Load() (AppConfig, error) {
 		return AppConfig{}, err
 	}
 	value.Language = normalizeLanguage(value.Language)
+	value.TranscriptionDevice = normalizeDevice(value.TranscriptionDevice)
 	return value, nil
 }
 
 // Save writes the configuration to the current user's config directory.
 func Save(value AppConfig) error {
 	value.Language = normalizeLanguage(value.Language)
+	value.TranscriptionDevice = normalizeDevice(value.TranscriptionDevice)
 	filePath, err := path()
 	if err != nil {
 		return err

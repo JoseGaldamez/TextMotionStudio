@@ -3,14 +3,21 @@
 import {transcription} from '../models';
 import {config} from '../models';
 import {models} from '../models';
+import {main} from '../models';
+
+export function AddVideoExportFrame(arg1:string,arg2:number):Promise<void>;
 
 export function CancelCaptionGeneration():Promise<void>;
 
 export function CancelModelDownload(arg1:string):Promise<void>;
 
+export function CancelVideoExport():Promise<void>;
+
 export function DeleteModel(arg1:string):Promise<void>;
 
 export function DownloadModel(arg1:string):Promise<void>;
+
+export function FinishVideoExport():Promise<string>;
 
 export function GenerateCaptions(arg1:string,arg2:string):Promise<transcription.Result>;
 
@@ -28,4 +35,10 @@ export function SelectModel(arg1:string):Promise<void>;
 
 export function SelectVideoFile():Promise<Record<string, string>>;
 
+export function StartVideoExport(arg1:string,arg2:number,arg3:number,arg4:number):Promise<main.VideoExportStart>;
+
+export function StartVideoExportWithFormat(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string):Promise<main.VideoExportStart>;
+
 export function UpdateAppConfig(arg1:boolean,arg2:string):Promise<config.AppConfig>;
+
+export function UpdateTranscriptionDevice(arg1:string):Promise<config.AppConfig>;

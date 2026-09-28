@@ -12,21 +12,22 @@ interface Props {
     language: Language;
     appConfig: config.AppConfig | null;
     onLanguageChange: (lang: Language) => Promise<void>;
+    onDeviceChange: (device: 'auto' | 'cpu') => Promise<void>;
 }
 
 type TabType = 'general' | 'ai' | 'storage' | 'shortcuts' | 'about';
 
-export function SettingsView({language, appConfig, onLanguageChange}: Props) {
+export function SettingsView({language, appConfig, onLanguageChange, onDeviceChange}: Props) {
     const copy = getCopy(language).settingsView;
     const localizedModels = getModelCopy(language);
     const [activeTab, setActiveTab] = useState<TabType>('general');
     const [theme, setTheme] = useState<'dark' | 'black' | 'slate'>('dark');
-    const [hardwareAcc, setHardwareAcc] = useState(true);
+    const computeDevice = appConfig?.transcriptionDevice === 'cpu' ? 'cpu' : 'auto';
+    const hardwareAcc = computeDevice === 'auto';
     const [autoSave, setAutoSave] = useState(true);
     const {models: localModels, progressById: modelProgress, error: modelError, select, download, cancel, remove} = useLocalModels();
     const [selectingModelId, setSelectingModelId] = useState<string | null>(null);
     const selectionInProgress = useRef(false);
-    const [computeDevice, setComputeDevice] = useState<'gpu' | 'cpu'>('gpu');
     const [wordTimestamps, setWordTimestamps] = useState(true);
     const [cacheCleared, setCacheCleared] = useState(false);
     const [cacheSize, setCacheSize] = useState('1.24 GB');
@@ -184,7 +185,7 @@ export function SettingsView({language, appConfig, onLanguageChange}: Props) {
                                 <input
                                     type="checkbox"
                                     checked={hardwareAcc}
-                                    onChange={e => setHardwareAcc(e.target.checked)}
+                                    onChange={e => void onDeviceChange(e.target.checked ? 'auto' : 'cpu')}
                                     className="size-5 accent-primary cursor-pointer mt-1"
                                 />
                             </label>
@@ -267,13 +268,13 @@ export function SettingsView({language, appConfig, onLanguageChange}: Props) {
                             <p className="text-xs text-muted mb-3">Choose the processing unit for AI speech inference.</p>
                             <div className="grid grid-cols-2 gap-3">
                                 {[
-                                    {id: 'gpu', label: copy.autoGpu, desc: 'Hardware accelerated (NVIDIA CUDA / DirectML)'},
+                                    {id: 'auto', label: copy.autoGpu, desc: language === 'es' ? 'CUDA o Vulkan si están disponibles; CPU en caso contrario' : 'CUDA or Vulkan when available; CPU otherwise'},
                                     {id: 'cpu', label: copy.forceCpu, desc: 'Compatible with all devices without dedicated GPU'},
                                 ].map(dev => (
                                     <button
                                         key={dev.id}
                                         type="button"
-                                        onClick={() => setComputeDevice(dev.id as any)}
+                                        onClick={() => void onDeviceChange(dev.id as 'auto' | 'cpu')}
                                         className={`cursor-pointer rounded-xl border p-3.5 text-left transition-all ${
                                             computeDevice === dev.id
                                                 ? 'border-primary bg-primary/10 text-white'

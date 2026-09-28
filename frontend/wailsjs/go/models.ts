@@ -4,6 +4,7 @@ export namespace config {
 	    onboardingCompleted: boolean;
 	    selectedModel?: string;
 	    language: string;
+	    transcriptionDevice?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -14,6 +15,24 @@ export namespace config {
 	        this.onboardingCompleted = source["onboardingCompleted"];
 	        this.selectedModel = source["selectedModel"];
 	        this.language = source["language"];
+	        this.transcriptionDevice = source["transcriptionDevice"];
+	    }
+	}
+
+}
+
+export namespace main {
+	
+	export class VideoExportStart {
+	    output: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new VideoExportStart(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.output = source["output"];
 	    }
 	}
 

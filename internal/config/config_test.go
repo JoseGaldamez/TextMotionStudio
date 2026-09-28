@@ -16,11 +16,11 @@ func TestLoadSaveAndFirstRun(t *testing.T) {
 	}
 
 	initial, err := Load()
-	if err != nil || initial.OnboardingCompleted || initial.SelectedModel != "" || initial.Language != "en" {
+	if err != nil || initial.OnboardingCompleted || initial.SelectedModel != "" || initial.Language != "en" || initial.TranscriptionDevice != "auto" {
 		t.Fatalf("unexpected first-run state: %+v, %v", initial, err)
 	}
 
-	want := AppConfig{OnboardingCompleted: true, SelectedModel: "small", Language: "es"}
+	want := AppConfig{OnboardingCompleted: true, SelectedModel: "small", Language: "es", TranscriptionDevice: "cpu"}
 	if err := Save(want); err != nil {
 		t.Fatal(err)
 	}
@@ -33,11 +33,11 @@ func TestLoadSaveAndFirstRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != "{\n  \"onboardingCompleted\": true,\n  \"selectedModel\": \"small\",\n  \"language\": \"es\"\n}\n" {
+	if string(data) != "{\n  \"onboardingCompleted\": true,\n  \"selectedModel\": \"small\",\n  \"language\": \"es\",\n  \"transcriptionDevice\": \"cpu\"\n}\n" {
 		t.Fatalf("unexpected config JSON: %s", data)
 	}
 
-	installed := AppConfig{OnboardingCompleted: true, SelectedModel: "base", Language: "en"}
+	installed := AppConfig{OnboardingCompleted: true, SelectedModel: "base", Language: "en", TranscriptionDevice: "auto"}
 	if err := Save(installed); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestLoadLegacyConfigDefaultsToEnglish(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := Load()
-	if err != nil || got.Language != "en" || !got.OnboardingCompleted || got.SelectedModel != "" {
+	if err != nil || got.Language != "en" || got.TranscriptionDevice != "auto" || !got.OnboardingCompleted || got.SelectedModel != "" {
 		t.Fatalf("unexpected legacy state: %+v, %v", got, err)
 	}
 }
