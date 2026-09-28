@@ -76,6 +76,28 @@ export function drawCaption(context: CanvasRenderingContext2D, drawing: CaptionD
             addPart({text: lines[lines.length - 1].parts.length ? ` ${text}` : text, active, visible});
             continue;
         }
+        if (text.includes(' ')) {
+            const subwords = text.split(' ');
+            for (const subword of subwords) {
+                const cur = lines[lines.length - 1];
+                const subJoined = cur.parts.length ? ` ${subword}` : subword;
+                if (cur.parts.length && cur.width + measure(subJoined, active) > maxTextWidth) {
+                    lines.push({parts: [], width: 0});
+                }
+                const targetLine = lines[lines.length - 1];
+                const piece = targetLine.parts.length ? ` ${subword}` : subword;
+                if (measure(piece, active) <= maxTextWidth) {
+                    addPart({text: piece, active, visible});
+                } else {
+                    for (const character of Array.from(subword)) {
+                        const charLine = lines[lines.length - 1];
+                        if (charLine.parts.length && charLine.width + measure(character, active) > maxTextWidth) lines.push({parts: [], width: 0});
+                        addPart({text: character, active, visible});
+                    }
+                }
+            }
+            continue;
+        }
         for (const character of Array.from(text)) {
             const current = lines[lines.length - 1];
             if (current.parts.length && current.width + measure(character, active) > maxTextWidth) lines.push({parts: [], width: 0});

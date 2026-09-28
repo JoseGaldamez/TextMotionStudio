@@ -94,9 +94,9 @@ button,select,input{font:inherit}
 @keyframes stage-sheen{0%,55%{transform:translateX(-85%)}85%,100%{transform:translateX(85%)}}
 @keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 .animate-shimmer{animation:shimmer 2s cubic-bezier(.4,0,.2,1) infinite}
-.generation-dialog{border:1px solid #30394b}
-.generation-dialog::backdrop{background:rgba(6,9,15,.82);backdrop-filter:blur(8px);animation:generation-backdrop-in .3s ease-out both}
-.generation-dialog[open]{animation:generation-dialog-in .42s cubic-bezier(.16,1,.3,1) both}
+.generation-dialog, .caption-dialog{border:1px solid #30394b;margin:auto!important;position:fixed!important;inset:0!important}
+.generation-dialog::backdrop, .caption-dialog::backdrop{background:rgba(6,9,15,.82);backdrop-filter:blur(8px);animation:generation-backdrop-in .3s ease-out both}
+.generation-dialog[open], .caption-dialog[open]{animation:generation-dialog-in .42s cubic-bezier(.16,1,.3,1) both}
 .decoder-visual{mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
 .decoder-glow{position:absolute;inset:22px 24%;border-radius:50%;background:#6f61ff;filter:blur(34px);opacity:.17}
 .decoder-bar{display:block;width:5px;height:var(--bar-height);min-height:8px;border-radius:4px;background:linear-gradient(180deg,#b6afff,#6c5cf4);transform-origin:center;animation:decoder-wave var(--bar-duration) ease-in-out var(--bar-delay) infinite alternate;box-shadow:0 5px 14px rgba(102,87,245,.18)}

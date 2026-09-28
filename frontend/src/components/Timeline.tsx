@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent} from 'react';
 import type {Caption} from '../models';
-import {SearchIcon} from './Icons';
+import {CloseIcon, SearchIcon} from './Icons';
 import {getCopy, type Language} from '../i18n';
 
 interface Props {
@@ -30,6 +30,11 @@ const analysisCache = new Map<string, AudioAnalysis>();
 const zoomCache = new Map<string, number>();
 
 const formatTime = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+const formatWordTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = (seconds % 60).toFixed(1);
+    return `${String(mins).padStart(2, '0')}:${secs.padStart(4, '0')}`;
+};
 
 function CaptionEditDialog({caption, language, onSave, onClose}: {caption: Caption; language: Language; onSave: (words: string[]) => void; onClose: () => void}) {
     const copy = getCopy(language).timeline;
@@ -44,34 +49,128 @@ function CaptionEditDialog({caption, language, onSave, onClose}: {caption: Capti
         return () => {if (dialog?.open) dialog.close()};
     }, []);
 
+    const handleClose = () => {
+        const dialog = dialogRef.current;
+        if (dialog?.open) dialog.close();
+        onClose();
+    };
+
     const save = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        const updated = words.map(word => word.trim());
-        const invalid = updated.findIndex(word => !word || /\s/.test(word));
+        const updated = words.map(word => word.trim().replace(/\s+/g, ' '));
+        const invalid = updated.findIndex(word => !word);
         if (invalid >= 0) {
             setError(copy.wordError);
             inputRefs.current[invalid]?.focus();
             return;
         }
+        const dialog = dialogRef.current;
+        if (dialog?.open) dialog.close();
         onSave(updated);
     };
 
-    return <dialog ref={dialogRef} onCancel={event => {event.preventDefault(); onClose()}} onClick={event => {if (event.target === event.currentTarget) onClose()}} aria-labelledby="caption-edit-title" className="w-[min(520px,calc(100vw-32px))] max-h-[calc(100vh-32px)] rounded-2xl border border-[#354058] bg-[#151b28] p-0 text-white shadow-[0_24px_70px_rgba(0,0,0,.55)] backdrop:bg-black/75">
-        <form onSubmit={save} className="flex max-h-[calc(100vh-32px)] flex-col">
-            <div className="border-b border-[#2a3548] px-6 py-5">
-                <h2 id="caption-edit-title" className="text-xl font-bold">{copy.editCaption}</h2>
-                <p className="mt-1 text-sm text-[#b8c5d8]">{formatTime(caption.start)} – {formatTime(caption.end)} · {copy.timingUnchanged}</p>
+    return <dialog
+        ref={dialogRef}
+        onCancel={event => {event.preventDefault(); handleClose()}}
+        onClick={event => {if (event.target === event.currentTarget) handleClose()}}
+        aria-labelledby="caption-edit-title"
+        className="caption-dialog m-auto fixed inset-0 flex max-h-[calc(100vh-48px)] w-[min(560px,calc(100vw-32px))] flex-col rounded-2xl bg-[#151b28] p-0 text-white shadow-[0_28px_90px_rgba(0,0,0,.75)] outline-none overflow-hidden"
+    >
+        <form onSubmit={save} className="flex min-h-0 flex-1 flex-col">
+            <div className="flex items-start justify-between border-b border-[#263143] px-6 py-5">
+                <div>
+                    <h2 id="caption-edit-title" className="text-xl font-bold tracking-tight text-white">{copy.editCaption}</h2>
+                    <p className="mt-1 text-xs text-[#a3b3ca]">
+                        <span className="font-mono text-[#8292ab]">{formatTime(caption.start)} – {formatTime(caption.end)}</span>
+                        <span className="mx-2 text-[#46536b]">·</span>
+                        <span>{copy.timingUnchanged}</span>
+                    </p>
+                    <p className="mt-2 text-xs leading-relaxed text-[#8b9bb2]">
+                        {copy.wordHint}
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={handleClose}
+                    aria-label={copy.close}
+                    className="grid size-8 cursor-pointer place-items-center rounded-lg text-[#8b9bb2] transition-colors hover:bg-[#202939] hover:text-white focus-visible:outline-2 focus-visible:outline-[#958aff]"
+                >
+                    <CloseIcon className="size-4" />
+                </button>
             </div>
-            <div className="min-h-0 space-y-3 overflow-y-auto px-6 py-5">
-                {words.map((word, index) => <label key={caption.words[index].id} className="block text-xs font-semibold text-[#c8d2e2]">
-                    {copy.word} {index + 1}
-                    <input ref={element => {inputRefs.current[index] = element}} type="text" value={word} onChange={event => {const next = [...words]; next[index] = event.target.value; setWords(next); setError('')}} autoFocus={index === 0} className="mt-1.5 block h-10 w-full rounded-lg border border-[#3a4860] bg-[#0d1420] px-3 text-sm font-medium text-white outline-none focus:border-[#958aff] focus:ring-2 focus:ring-[#958aff]/25"/>
-                </label>)}
-                {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
+
+            <div className="border-b border-[#202939] bg-[#0f141f] px-6 py-3">
+                <span className="text-[10px] font-bold tracking-wider uppercase text-[#7f8fa7]">{copy.livePreview}</span>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-xl border border-[#232d3f] bg-[#141b27] p-2.5">
+                    {words.map((w, i) => {
+                        const val = w.trim();
+                        return (
+                            <span
+                                key={caption.words[i]?.id ?? i}
+                                className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
+                                    val
+                                        ? 'border border-[#7264f5]/40 bg-[#251f47] text-[#c9c1ff] shadow-[0_2px_8px_rgba(102,87,245,.15)]'
+                                        : 'border border-dashed border-rose-500/40 bg-rose-950/20 text-rose-300'
+                                }`}
+                            >
+                                {val || '…'}
+                            </span>
+                        );
+                    })}
+                </div>
             </div>
-            <div className="flex justify-end gap-3 border-t border-[#2a3548] px-6 py-4">
-                <button type="button" onClick={onClose} className="rounded-lg border border-[#3a4860] px-4 py-2 text-sm font-semibold text-[#d3dbea] hover:bg-[#222c3d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#958aff]">{copy.cancelEdit}</button>
-                <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#958aff]">{copy.saveEdit}</button>
+
+            <div className="timeline-scroll min-h-0 flex-1 space-y-3.5 overflow-y-auto px-6 py-5">
+                {words.map((word, index) => {
+                    const captionWord = caption.words[index];
+                    return (
+                        <div key={captionWord?.id ?? index} className="space-y-1.5">
+                            <div className="flex items-center justify-between text-xs font-semibold text-[#c8d2e2]">
+                                <span>{copy.word} {index + 1}</span>
+                                {captionWord && (
+                                    <span className="font-mono text-[11px] text-[#718199]">
+                                        {formatWordTime(captionWord.start)} – {formatWordTime(captionWord.end)}
+                                    </span>
+                                )}
+                            </div>
+                            <input
+                                ref={element => {inputRefs.current[index] = element}}
+                                type="text"
+                                value={word}
+                                onChange={event => {
+                                    const next = [...words];
+                                    next[index] = event.target.value;
+                                    setWords(next);
+                                    setError('');
+                                }}
+                                autoFocus={index === 0}
+                                placeholder={copy.wordPlaceholder}
+                                className="block h-10 w-full rounded-lg border border-[#3a4860] bg-[#0d1420] px-3.5 text-sm font-medium text-white placeholder-[#55637a] outline-none transition-colors focus:border-[#958aff] focus:ring-2 focus:ring-[#958aff]/25"
+                            />
+                        </div>
+                    );
+                })}
+                {error && (
+                    <div role="alert" className="rounded-lg border border-rose-500/40 bg-rose-950/40 px-3.5 py-2.5 text-xs font-semibold text-rose-200">
+                        {error}
+                    </div>
+                )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-[#263143] bg-[#121722] px-6 py-4">
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="h-10 cursor-pointer rounded-lg border border-[#3a4860] bg-[#18202e] px-4 text-sm font-semibold text-[#d3dbea] transition-colors hover:border-[#4d5d7a] hover:bg-[#202a3c] focus-visible:outline-2 focus-visible:outline-[#958aff]"
+                >
+                    {copy.cancelEdit}
+                </button>
+                <button
+                    type="submit"
+                    className="h-10 cursor-pointer rounded-lg bg-primary px-5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(102,87,245,.35)] transition-all hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-[#958aff]"
+                >
+                    {copy.saveEdit}
+                </button>
             </div>
         </form>
     </dialog>;
@@ -316,6 +415,46 @@ export function Timeline({videoUrl, videoFile, captions, isGenerating, activeCap
         });
     };
 
+    const focusTimeline = useCallback((captionId?: string | null) => {
+        const applyFocus = () => {
+            if (captionId && sectionRef.current) {
+                const btn = sectionRef.current.querySelector<HTMLButtonElement>(`[data-caption-id="${captionId}"]`);
+                if (btn) {
+                    btn.focus();
+                    return;
+                }
+            }
+            sectionRef.current?.focus();
+        };
+
+        requestAnimationFrame(applyFocus);
+        setTimeout(applyFocus, 40);
+    }, []);
+
+    const handleCloseDialog = useCallback((captionId?: string | null) => {
+        setEditingCaptionId(null);
+        focusTimeline(captionId);
+    }, [focusTimeline]);
+
+    const handleSaveDialog = useCallback((captionId: string, words: string[]) => {
+        onCaptionEdit(captionId, words);
+        setEditingCaptionId(null);
+        focusTimeline(captionId);
+    }, [onCaptionEdit, focusTimeline]);
+
+    useEffect(() => {
+        const handleBodyKeyDown = (event: KeyboardEvent) => {
+            if (event.code !== 'Space' && event.key !== ' ') return;
+            const target = event.target as HTMLElement | null;
+            if (!target || target !== document.body) return;
+            event.preventDefault();
+            onTogglePlay?.();
+        };
+
+        window.addEventListener('keydown', handleBodyKeyDown);
+        return () => window.removeEventListener('keydown', handleBodyKeyDown);
+    }, [onTogglePlay]);
+
     useEffect(() => {
         if (!videoUrl || !videoFile) {
             setAnalysis(null);
@@ -543,7 +682,7 @@ export function Timeline({videoUrl, videoFile, captions, isGenerating, activeCap
                     {duration > 0 && captions.length > 0 && <div className="relative h-12">{captions.filter(caption => caption.start < duration && caption.end > 0).map(caption => {
                         const start = Math.max(0, caption.start);
                         const end = Math.min(duration, caption.end);
-                        return <button key={caption.id} data-caption type="button" title={copy.editHint} aria-label={`${copy.editCaption}: ${caption.text}`} className={`absolute top-0 h-12 min-w-[20px] cursor-pointer overflow-hidden rounded-[9px] border px-2 text-ellipsis whitespace-nowrap text-[11px] font-semibold text-[#e3e7ee] hover:bg-[#252e40] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a69cff] ${activeCaptionId === caption.id ? 'border-[#7669ff] bg-[#5f52e7] shadow-[0_7px_17px_rgba(72,57,206,.22)]' : 'border-transparent bg-[#1d2533]'}`} style={{left: `${start / duration * 100}%`, width: `${(end - start) / duration * 100}%`}} onClick={() => onCaptionSelect(caption.id)} onDoubleClick={() => {if (caption.words.length) setEditingCaptionId(caption.id)}} onKeyDown={event => {if (event.key === 'Enter' || event.key === 'F2') {event.preventDefault(); event.stopPropagation(); if (caption.words.length) setEditingCaptionId(caption.id)}}}>{caption.text}</button>;
+                        return <button key={caption.id} data-caption data-caption-id={caption.id} type="button" title={copy.editHint} aria-label={`${copy.editCaption}: ${caption.text}`} className={`absolute top-0 h-12 min-w-[20px] cursor-pointer overflow-hidden rounded-[9px] border px-2 text-ellipsis whitespace-nowrap text-[11px] font-semibold text-[#e3e7ee] hover:bg-[#252e40] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a69cff] ${activeCaptionId === caption.id ? 'border-[#7669ff] bg-[#5f52e7] shadow-[0_7px_17px_rgba(72,57,206,.22)]' : 'border-transparent bg-[#1d2533]'}`} style={{left: `${start / duration * 100}%`, width: `${(end - start) / duration * 100}%`}} onClick={() => onCaptionSelect(caption.id)} onDoubleClick={() => {if (caption.words.length) setEditingCaptionId(caption.id)}} onKeyDown={event => {if (event.key === 'Enter' || event.key === 'F2') {event.preventDefault(); event.stopPropagation(); if (caption.words.length) setEditingCaptionId(caption.id)}}}>{caption.text}</button>;
                     })}</div>}
                     {isGenerating && <div className="relative flex h-12 items-center gap-1.5 overflow-hidden" aria-hidden="true">
                         {[16, 12, 21, 14, 18, 11].map((width, index) => (
@@ -570,6 +709,6 @@ export function Timeline({videoUrl, videoFile, captions, isGenerating, activeCap
                 </div>
             </>}
         </div>
-        {editingCaption && <CaptionEditDialog key={editingCaption.id} caption={editingCaption} language={language} onClose={() => setEditingCaptionId(null)} onSave={words => {onCaptionEdit(editingCaption.id, words); setEditingCaptionId(null)}}/>}
+        {editingCaption && <CaptionEditDialog key={editingCaption.id} caption={editingCaption} language={language} onClose={() => handleCloseDialog(editingCaption.id)} onSave={words => handleSaveDialog(editingCaption.id, words)}/>}
     </section>;
 }
