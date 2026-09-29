@@ -149,6 +149,7 @@ export function WorkflowPanel({project, styles, captionsReady, isGenerating, rea
             {isGenerating && <button type="button" className="mt-2 w-full text-xs text-muted hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#958aff]" onClick={onCancel}>{copy.cancelGeneration}</button>}
             {isGenerating && <span className="sr-only" role="status">{copy.generating}</span>}
             {generationError && <p className="mt-2 text-xs text-red-300" role="alert">{generationError}</p>}
+            {generationError.includes('Media Feature Pack') && <a className="mt-2 inline-block text-xs text-primary underline" href="https://support.microsoft.com/es-es/windows/experience/platform-variants/media-feature-pack-for-windows-n" target="_blank" rel="noreferrer">{language === 'es' ? 'Instalar componentes multimedia de Windows N' : 'Install Windows N media components'}</a>}
         </section>
 
         {/* Paso 3: Personaliza tus subtítulos (Solo activo si se generaron subtítulos) */}

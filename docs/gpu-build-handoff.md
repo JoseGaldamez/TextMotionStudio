@@ -1,11 +1,37 @@
 # GPU build handoff — 2026-09-28
 
+Historical build record. The current Windows export path uses Media Foundation;
+the current Windows package no longer includes FFmpeg. The notes below describe
+the previous installer and should not be used as current release instructions.
+
 ## Objective
 
 Produce and verify a distributable Windows build of TextMotion Studio with
 whisper.cpp CPU, CUDA and Vulkan transcription backends. Auto mode should use
 an available GPU and fall back to CPU; the CPU setting passes `--no-gpu`.
 Video export through FFmpeg is unchanged.
+
+## Completed after resuming — 2026-09-28
+
+- The incremental CUDA build completed. The candidate is at
+  `build/bin/native-candidates/windows-amd64-gpu/` and its exact binary hashes
+  are approved in `third_party/approved/windows-amd64-gpu.sha256`.
+- The candidate passed `nativecheck`. A short speech sample produced JSON in
+  CUDA, forced CPU, Vulkan-only and automatic CPU-only modes. The Vulkan-only
+  and CPU-only checks isolated those DLLs on the same RTX 4060 Ti computer;
+  separate AMD/Intel hardware has not been tested.
+- The local NSIS installer was built at
+  `build/bin/TextMotionStudio-amd64-installer.exe` (about 509 MB). It includes
+  CUDA/Vulkan/CPU libraries, the CUDA EULA and the pinned FFmpeg source archive,
+  build script and configuration. NSIS was already installed but not on PATH;
+  `scripts/package-windows.ps1` now locates it and verifies a new installer was
+  produced.
+- Remaining distribution tasks are external: test the installer on separate
+  hardware and publish the matching FFmpeg source alongside any download page.
+  The source is already included inside this installer. The app has not been
+  code signed or submitted to Microsoft Store.
+
+The sections below preserve the original paused-build state and resume notes.
 
 ## State at pause
 

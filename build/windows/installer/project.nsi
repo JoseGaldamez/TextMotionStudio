@@ -104,7 +104,6 @@ Section
     File /r "runtime\windows-amd64\*.*"
     SetOutPath $INSTDIR
     File "..\..\..\THIRD_PARTY_NOTICES.txt"
-    File /oname=FFMPEG_LICENSE.txt "..\..\..\third_party\ffmpeg\LICENSE"
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"

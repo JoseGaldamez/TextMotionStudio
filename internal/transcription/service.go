@@ -1,14 +1,17 @@
 package transcription
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -45,7 +48,10 @@ func (s *Service) Generate(ctx context.Context, video, model, modelID, language,
 	if err != nil {
 		return Result{}, fmt.Errorf("%w: %v", ErrToolsUnavailable, err)
 	}
-	ffmpeg, whisper := resources.FFmpegPath, resources.WhisperPath
+	decoder, whisper := resources.FFmpegPath, resources.WhisperPath
+	if runtime.GOOS == "windows" {
+		decoder = resources.MediaPath
+	}
 	help, err := exec.CommandContext(ctx, whisper, "--help").CombinedOutput()
 	if err != nil || !bytes.Contains(help, []byte("--output-json-full")) || !bytes.Contains(help, []byte("--output-file")) || !bytes.Contains(help, []byte("--max-len")) || !bytes.Contains(help, []byte("--split-on-word")) {
 		return Result{}, fmt.Errorf("unsupported whisper-cli: %w", ErrToolsUnavailable)
@@ -57,7 +63,7 @@ func (s *Service) Generate(ctx context.Context, video, model, modelID, language,
 	defer os.RemoveAll(temp)
 	audio := filepath.Join(temp, "audio.wav")
 	s.emitProgress("preparing")
-	if err := media.ExtractAudio(ctx, ffmpeg, video, audio); err != nil {
+	if err := media.ExtractAudio(ctx, decoder, video, audio); err != nil {
 		return Result{}, err
 	}
 	audioDuration := 0.0
@@ -72,11 +78,41 @@ func (s *Service) Generate(ctx context.Context, video, model, modelID, language,
 	}
 	started := time.Now()
 	cmd := exec.CommandContext(ctx, whisper, args...)
+	pipe, err := cmd.StderrPipe()
+	if err != nil {
+		return Result{}, err
+	}
+	if err := cmd.Start(); err != nil {
+		return Result{}, err
+	}
 	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
+	reader := bufio.NewReader(pipe)
+	reportedDevice := false
+	var readErr error
+	for {
+		line, err := reader.ReadString('\n')
+		if line != "" {
+			stderr.WriteString(line)
+			if !reportedDevice {
+				if backend := backendFromLog(line); backend != "" {
+					s.emit("captions:generation:progress", Progress{Stage: "transcribing", Device: backend})
+					reportedDevice = true
+				}
+			}
+		}
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				readErr = err
+			}
+			break
+		}
+	}
+	if err := cmd.Wait(); err != nil {
 		log.Printf("caption transcription subprocess failed: %v: %s", err, stderr.String())
 		return Result{}, err
+	}
+	if readErr != nil {
+		return Result{}, fmt.Errorf("read transcription output: %w", readErr)
 	}
 	s.emitProgress("processing")
 	words, detected, err := ParseJSON(base + ".json")
@@ -96,6 +132,19 @@ func (s *Service) Generate(ctx context.Context, video, model, modelID, language,
 	return result, nil
 }
 
+func backendFromLog(line string) string {
+	switch {
+	case strings.Contains(line, "whisper_backend_init_gpu: using CUDA"):
+		return "cuda"
+	case strings.Contains(line, "whisper_backend_init_gpu: using Vulkan"):
+		return "vulkan"
+	case strings.Contains(line, "whisper_backend_init_gpu: no GPU found"):
+		return "cpu"
+	default:
+		return ""
+	}
+}
+
 func FriendlyError(err error) error {
 	if errors.Is(err, context.Canceled) {
 		return errors.New("Caption generation was canceled.")
@@ -106,7 +155,10 @@ func FriendlyError(err error) error {
 	if errors.Is(err, ErrToolsUnavailable) {
 		return errors.New("Caption generation is unavailable because this installation is missing required tools. Please reinstall TextMotion Studio.")
 	}
-	if strings.Contains(err.Error(), "ffmpeg:") {
+	if strings.Contains(err.Error(), "media decode:") {
+		if runtime.GOOS == "windows" {
+			return errors.New("We couldn't read the audio from this video. On Windows N, install Media Feature Pack from Microsoft Support.")
+		}
 		return errors.New("We couldn't read the audio from this video.")
 	}
 	return errors.New("Couldn't generate captions. Please try again.")

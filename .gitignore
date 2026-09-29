@@ -1,5 +1,12 @@
 build/bin
 build/gpu-whisper/
+build/ffmpeg-source-nvenc/
+build/nv-codec-headers/
+build/ffmpeg-nvenc/
+build/ffmpeg-temp/
+build/ffmpeg-nvenc-build.log
+build/ffmpeg-nvenc-config.log
+build/go-cache/
 node_modules
 frontend/dist
 build/windows/installer/runtime/

@@ -25,6 +25,7 @@ type Result struct {
 
 type Progress struct {
 	Stage    string `json:"stage"`
+	Device   string `json:"device,omitempty"`
 	Progress *int   `json:"progress,omitempty"`
 	Message  string `json:"message,omitempty"`
 }

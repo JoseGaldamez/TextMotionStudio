@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState} from 'react';
 import type {CSSProperties} from 'react';
 import {AudioLines, X} from 'lucide-react';
+import {EventsOn} from '../../wailsjs/runtime/runtime';
 import {getCopy, type Language} from '../i18n';
 
 interface Props {
@@ -9,12 +10,17 @@ interface Props {
 }
 
 const waveform = [28, 46, 68, 42, 82, 56, 94, 64, 78, 48, 88, 58, 100, 66, 86, 52, 76, 62, 92, 54, 72, 44, 64, 38, 24];
+type GenerationProgress = {stage: string; device?: 'cuda' | 'vulkan' | 'cpu'};
 
 export function CaptionGenerationModal({language, onCancel}: Props) {
     const copy = getCopy(language).generationModal;
     const dialogRef = useRef<HTMLDialogElement>(null);
     const cancelButtonRef = useRef<HTMLButtonElement>(null);
     const [isCanceling, setIsCanceling] = useState(false);
+    const [stage, setStage] = useState('starting');
+    const [device, setDevice] = useState<GenerationProgress['device']>();
+    const [startedAt] = useState(() => Date.now());
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
     useEffect(() => {
         const dialog = dialogRef.current;
@@ -23,6 +29,20 @@ export function CaptionGenerationModal({language, onCancel}: Props) {
         cancelButtonRef.current?.focus();
         return () => dialog.close();
     }, []);
+
+    useEffect(() => {
+        const off = EventsOn('captions:generation:progress', (progress: GenerationProgress) => {
+            setStage(progress.stage);
+            if (progress.device) setDevice(progress.device);
+        });
+        const timer = window.setInterval(() => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+        return () => {off(); window.clearInterval(timer)};
+    }, [startedAt]);
+
+    const minutes = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
+    const seconds = String(elapsedSeconds % 60).padStart(2, '0');
+    const deviceName = device === 'cuda' ? copy.gpuCuda : device === 'vulkan' ? copy.gpuVulkan : device === 'cpu' ? copy.cpu : copy.detectingDevice;
+    const stageName = stage === 'preparing' ? copy.preparing : stage === 'transcribing' ? copy.transcribing : stage === 'processing' ? copy.processing : copy.starting;
 
     const cancel = () => {
         if (isCanceling) return;
@@ -67,9 +87,20 @@ export function CaptionGenerationModal({language, onCancel}: Props) {
                 <h2 id="generation-title" className="text-[21px] font-extrabold tracking-[-.02em] text-white">{copy.title}</h2>
                 <p id="generation-description" className="mx-auto mt-3 max-w-[410px] text-sm leading-6 text-[#aeb8c8]">{copy.description}</p>
 
-                <div className="mt-6 flex items-center justify-center gap-2 text-xs font-semibold text-[#8e99ab]" role="status" aria-live="polite">
+                <div className="mt-6 grid grid-cols-2 gap-3 text-left">
+                    <div className="rounded-xl border border-[#313c52] bg-[#1b2433] px-4 py-3">
+                        <span className="block text-[11px] font-semibold text-[#9eabc0]">{copy.deviceLabel}</span>
+                        <strong className="mt-1 block text-sm font-bold text-white" aria-live="polite">{deviceName}</strong>
+                    </div>
+                    <div className="rounded-xl border border-[#313c52] bg-[#1b2433] px-4 py-3">
+                        <span className="block text-[11px] font-semibold text-[#9eabc0]">{copy.elapsedLabel}</span>
+                        <strong className="mt-1 block font-mono text-sm font-bold tabular-nums text-white">{minutes}:{seconds}</strong>
+                    </div>
+                </div>
+
+                <div className="mt-5 flex items-center justify-center gap-2 text-xs font-semibold text-[#aeb8c8]" role="status" aria-live="polite">
                     <span className="generation-pulse size-1.5 rounded-full bg-[#8d82ff]" aria-hidden="true"/>
-                    {isCanceling ? copy.canceling : copy.localProcessing}
+                    {isCanceling ? copy.canceling : stageName}
                 </div>
 
                 <button

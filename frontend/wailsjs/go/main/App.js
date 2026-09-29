@@ -50,6 +50,10 @@ export function ListModels() {
   return window['go']['main']['App']['ListModels']();
 }
 
+export function OpenExportLocation(arg1) {
+  return window['go']['main']['App']['OpenExportLocation'](arg1);
+}
+
 export function RegisterVideoFile(arg1) {
   return window['go']['main']['App']['RegisterVideoFile'](arg1);
 }

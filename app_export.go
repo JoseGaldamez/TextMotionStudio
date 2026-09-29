@@ -11,9 +11,11 @@ import (
 	"image"
 	"image/draw"
 	"image/png"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,19 +25,19 @@ import (
 )
 
 type videoExportJob struct {
-	mu       sync.Mutex
-	cancel   context.CancelFunc
-	ctx      context.Context
-	input    string
-	output   string
-	temp     string
-	ffmpeg   string
-	format   string
-	width    int
-	height   int
-	duration float64
-	frames   []float64
-	running  bool
+	mu        sync.Mutex
+	cancel    context.CancelFunc
+	ctx       context.Context
+	input     string
+	output    string
+	temp      string
+	mediaTool string
+	format    string
+	width     int
+	height    int
+	duration  float64
+	frames    []float64
+	running   bool
 }
 
 type VideoExportStart struct {
@@ -54,7 +56,7 @@ func (a *App) startVideoExport(videoPath string, width, height int, duration flo
 	if width < 1 || height < 1 || width > 8192 || height > 8192 || duration <= 0 || duration > 21600 {
 		return VideoExportStart{}, errors.New("Invalid video dimensions or duration.")
 	}
-	if format != "mp4" && format != "mov" {
+	if format != "mp4" && (format != "mov" || goruntime.GOOS == "windows") {
 		return VideoExportStart{}, errors.New("Unsupported export format.")
 	}
 	a.videoMu.RLock()
@@ -78,7 +80,12 @@ func (a *App) startVideoExport(videoPath string, width, height int, duration flo
 	}
 	resources, err := runtimeassets.Resolve(filepath.Dir(executable), a.ctx.Value("buildtype") == "dev")
 	if err != nil {
-		return VideoExportStart{}, fmt.Errorf("FFmpeg is unavailable: %w", err)
+		return VideoExportStart{}, fmt.Errorf("Media export is unavailable: %w", err)
+	}
+	if goruntime.GOOS == "windows" {
+		if err := exec.CommandContext(a.ctx, resources.MediaPath, "probe").Run(); err != nil {
+			return VideoExportStart{}, errors.New("Windows media components are unavailable. On Windows N, install Media Feature Pack from Microsoft Support.")
+		}
 	}
 	a.exportMu.Lock()
 	if a.exportJob != nil {
@@ -111,7 +118,11 @@ func (a *App) startVideoExport(videoPath string, width, height int, duration flo
 		return VideoExportStart{}, err
 	}
 	ctx, cancel := context.WithCancel(a.ctx)
-	job := &videoExportJob{cancel: cancel, ctx: ctx, input: videoPath, output: output, temp: temp, ffmpeg: resources.FFmpegPath, format: format, width: width, height: height, duration: duration}
+	mediaTool := resources.FFmpegPath
+	if goruntime.GOOS == "windows" {
+		mediaTool = resources.MediaPath
+	}
+	job := &videoExportJob{cancel: cancel, ctx: ctx, input: videoPath, output: output, temp: temp, mediaTool: mediaTool, format: format, width: width, height: height, duration: duration}
 	a.exportMu.Lock()
 	if a.exportJob != nil {
 		a.exportMu.Unlock()
@@ -170,6 +181,9 @@ func (a *App) FinishVideoExport() (string, error) {
 	job.running = true
 	job.mu.Unlock()
 	defer a.clearVideoExport(job)
+	if goruntime.GOOS == "windows" {
+		return a.finishWindowsVideoExport(job)
+	}
 	var list strings.Builder
 	for index, seconds := range job.frames {
 		fmt.Fprintf(&list, "file '%06d.qoi'\nduration %.9f\n", index, seconds)
@@ -180,15 +194,85 @@ func (a *App) FinishVideoExport() (string, error) {
 	}
 	partial := filepath.Join(job.temp, "result."+job.format)
 	filter := "[1:v]format=rgba[caption];[0:v][caption]overlay=0:0:format=auto:eof_action=pass[v]"
-	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-progress", "pipe:1", "-i", job.input, "-f", "concat", "-safe", "0", "-i", filepath.Join(job.temp, "frames.ffconcat"), "-filter_complex", filter, "-map", "[v]", "-map", "0:a?", "-fps_mode:v", "passthrough"}
-	if job.format == "mp4" {
-		args = append(args, "-c:v", "mpeg4", "-q:v", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart")
-	} else {
-		args = append(args, "-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuv444p10le", "-c:a", "pcm_s24le")
+	baseArgs := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-progress", "pipe:1", "-i", job.input, "-f", "concat", "-safe", "0", "-i", filepath.Join(job.temp, "frames.ffconcat"), "-filter_complex", filter, "-map", "[v]", "-map", "0:a?", "-fps_mode:v", "passthrough"}
+	encode := func(gpu bool) error {
+		args := append([]string(nil), baseArgs...)
+		if job.format == "mp4" {
+			if gpu {
+				args = append(args, "-c:v", "h264_nvenc", "-preset", "p6", "-tune", "hq", "-rc", "vbr", "-cq", "16", "-b:v", "0")
+			} else {
+				args = append(args, "-c:v", "mpeg4", "-q:v", "1")
+			}
+			args = append(args, "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart")
+		} else {
+			args = append(args, "-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuv444p10le", "-c:a", "pcm_s24le")
+		}
+		args = append(args, "-y", partial)
+		device := "cpu"
+		if gpu {
+			device = "nvidia"
+		}
+		runtime.EventsEmit(a.ctx, "video:export:device", device)
+		return a.runVideoExport(job, args)
 	}
-	args = append(args, "-y", partial)
-	cmd := exec.CommandContext(job.ctx, job.ffmpeg, args...)
-	cmd.Dir = job.temp
+	useGPU := job.format == "mp4" && nvencAvailable(job.ctx, job.mediaTool)
+	err := encode(useGPU)
+	if err != nil && useGPU && job.ctx.Err() == nil {
+		log.Printf("NVENC export failed; retrying on CPU: %v", err)
+		err = encode(false)
+	}
+	if job.ctx.Err() != nil {
+		return "", errors.New("Video export was canceled.")
+	}
+	if err != nil {
+		return "", err
+	}
+	if err := os.Rename(partial, job.output); err != nil {
+		return "", err
+	}
+	runtime.EventsEmit(a.ctx, "video:export:progress", 100)
+	return job.output, nil
+}
+
+func (a *App) OpenExportLocation(path string) error {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("Exported video is not a file.")
+	}
+	var command *exec.Cmd
+	switch goruntime.GOOS {
+	case "windows":
+		command = exec.Command("explorer.exe", "/select,", path)
+	case "darwin":
+		command = exec.Command("open", "-R", path)
+	default:
+		command = exec.Command("xdg-open", filepath.Dir(path))
+	}
+	if err := command.Start(); err != nil {
+		return err
+	}
+	return command.Process.Release()
+}
+
+func (a *App) finishWindowsVideoExport(job *videoExportJob) (string, error) {
+	var manifest strings.Builder
+	for _, seconds := range job.frames {
+		fmt.Fprintf(&manifest, "%.9f\n", seconds)
+	}
+	manifestPath := filepath.Join(job.temp, "captions.txt")
+	if err := os.WriteFile(manifestPath, []byte(manifest.String()), 0600); err != nil {
+		return "", err
+	}
+	partial := filepath.Join(job.temp, "result.mp4")
+	args := []string{"export", job.input, partial, manifestPath, strconv.Itoa(job.width), strconv.Itoa(job.height), strconv.FormatFloat(job.duration, 'f', 9, 64)}
+	cmd := exec.CommandContext(job.ctx, job.mediaTool, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", err
@@ -197,6 +281,51 @@ func (a *App) FinishVideoExport() (string, error) {
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
 		return "", err
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.HasPrefix(line, "device:") {
+				runtime.EventsEmit(a.ctx, "video:export:device", strings.TrimPrefix(line, "device:"))
+			} else if percent, err := strconv.Atoi(line); err == nil && percent >= 0 && percent <= 100 {
+				runtime.EventsEmit(a.ctx, "video:export:progress", percent)
+			}
+		}
+	}()
+	err = cmd.Wait()
+	<-done
+	if job.ctx.Err() != nil {
+		return "", errors.New("Video export was canceled.")
+	}
+	if err != nil {
+		return "", fmt.Errorf("Windows media export failed: %s", strings.TrimSpace(stderr.String()))
+	}
+	if err := os.Rename(partial, job.output); err != nil {
+		return "", err
+	}
+	runtime.EventsEmit(a.ctx, "video:export:progress", 100)
+	return job.output, nil
+}
+
+func nvencAvailable(ctx context.Context, ffmpeg string) bool {
+	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-f", "lavfi", "-i", "color=c=black:s=256x256:d=0.04", "-frames:v", "1", "-an", "-c:v", "h264_nvenc", "-preset", "p6", "-tune", "hq", "-rc", "vbr", "-cq", "16", "-b:v", "0", "-pix_fmt", "yuv420p", "-f", "null", "-"}
+	return exec.CommandContext(ctx, ffmpeg, args...).Run() == nil
+}
+
+func (a *App) runVideoExport(job *videoExportJob, args []string) error {
+	cmd := exec.CommandContext(job.ctx, job.mediaTool, args...)
+	cmd.Dir = job.temp
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return err
 	}
 	done := make(chan struct{})
 	go func() {
@@ -223,16 +352,12 @@ func (a *App) FinishVideoExport() (string, error) {
 	err = cmd.Wait()
 	<-done
 	if job.ctx.Err() != nil {
-		return "", errors.New("Video export was canceled.")
+		return errors.New("Video export was canceled.")
 	}
 	if err != nil {
-		return "", fmt.Errorf("FFmpeg export failed: %s", strings.TrimSpace(stderr.String()))
+		return fmt.Errorf("FFmpeg export failed: %s", strings.TrimSpace(stderr.String()))
 	}
-	if err := os.Rename(partial, job.output); err != nil {
-		return "", err
-	}
-	runtime.EventsEmit(a.ctx, "video:export:progress", 100)
-	return job.output, nil
+	return nil
 }
 
 func (a *App) CancelVideoExport() {

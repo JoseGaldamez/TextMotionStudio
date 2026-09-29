@@ -1,6 +1,6 @@
 import {useEffect, useRef, useState} from 'react';
 import type {VideoProject} from '../../models';
-import {AddVideoExportFrame, CancelVideoExport, FinishVideoExport, StartVideoExportWithFormat} from '../../../wailsjs/go/main/App';
+import {AddVideoExportFrame, CancelVideoExport, FinishVideoExport, OpenExportLocation, StartVideoExportWithFormat} from '../../../wailsjs/go/main/App';
 import {EventsOn} from '../../../wailsjs/runtime/runtime';
 import {buildExportFrames, createCaptionFrameRenderer} from '../../exportFrames';
 import {DownloadIcon, CheckIcon} from '../Icons';
@@ -12,10 +12,10 @@ interface Metadata {width: number; height: number; duration: number}
 export function VideoExportView({project, language, onBackToEdit}: Props) {
     const es = language === 'es';
     const [metadata, setMetadata] = useState<Metadata | null>(null);
-    const [format, setFormat] = useState<'mp4' | 'mov'>('mp4');
     const [busy, setBusy] = useState(false);
     const [progress, setProgress] = useState(0);
     const [phase, setPhase] = useState('');
+    const [device, setDevice] = useState<'nvidia' | 'gpu' | 'cpu' | 'system' | null>(null);
     const [output, setOutput] = useState('');
     const [error, setError] = useState('');
     const active = useRef(false);
@@ -40,18 +40,28 @@ export function VideoExportView({project, language, onBackToEdit}: Props) {
         void CancelVideoExport();
     };
 
+    const openExportLocation = async () => {
+        try {
+            await OpenExportLocation(output);
+        } catch (reason) {
+            setError(`${es ? 'No se pudo abrir la ubicación del video' : 'Could not open the video location'}: ${String(reason)}`);
+        }
+    };
+
     const exportVideo = async () => {
         if (!project.videoPath || !metadata || busy) return;
         setError('');
         setOutput('');
         setProgress(0);
+        setDevice(null);
         setBusy(true);
         canceled.current = false;
         const off = EventsOn('video:export:progress', (percent: number) => {setPhase(es ? 'Codificando video…' : 'Encoding video…'); setProgress(20 + Math.round(percent * .8))});
+        const offDevice = EventsOn('video:export:device', (value: 'nvidia' | 'gpu' | 'cpu' | 'system') => setDevice(value));
         let started = false;
         let renderer: Awaited<ReturnType<typeof createCaptionFrameRenderer>> | null = null;
         try {
-            const selection = await StartVideoExportWithFormat(project.videoPath, metadata.width, metadata.height, metadata.duration, format);
+            const selection = await StartVideoExportWithFormat(project.videoPath, metadata.width, metadata.height, metadata.duration, 'mp4');
             if (!selection?.output) return;
             started = true;
             active.current = true;
@@ -80,6 +90,7 @@ export function VideoExportView({project, language, onBackToEdit}: Props) {
             if (started) await CancelVideoExport();
             active.current = false;
             off();
+            offDevice();
             setBusy(false);
         }
     };
@@ -94,20 +105,19 @@ export function VideoExportView({project, language, onBackToEdit}: Props) {
 
             <div className="mt-8 rounded-2xl border border-[#283448] bg-[#131c2a] p-6">
                 <h2 className="text-lg font-bold">{project.videoName ?? (es ? 'Sin video' : 'No video')}</h2>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2" role="group" aria-label={es ? 'Formato de exportación' : 'Export format'}>
-                    <button type="button" disabled={busy} onClick={() => setFormat('mp4')} aria-pressed={format === 'mp4'} className={`rounded-xl border p-4 text-left disabled:opacity-50 ${format === 'mp4' ? 'border-primary bg-primary/10' : 'border-[#344056] hover:border-[#6a63a9]'}`}><strong className="block text-sm">MP4 · MPEG-4 Parte 2</strong><span className="mt-1 block text-xs text-[#9daabd]">{es ? 'Archivo .mp4 de alta calidad. Algunas plataformas requieren H.264.' : 'High-quality .mp4 file. Some platforms require H.264.'}</span></button>
-                    <button type="button" disabled={busy} onClick={() => setFormat('mov')} aria-pressed={format === 'mov'} className={`rounded-xl border p-4 text-left disabled:opacity-50 ${format === 'mov' ? 'border-primary bg-primary/10' : 'border-[#344056] hover:border-[#6a63a9]'}`}><strong className="block text-sm">MOV · ProRes 4444</strong><span className="mt-1 block text-xs text-[#9daabd]">{es ? 'Máster de mayor fidelidad para edición; archivo grande.' : 'Higher fidelity editing master; large file.'}</span></button>
-                </div>
+                <div className="mt-5 rounded-xl border border-primary bg-primary/10 p-4 text-left"><strong className="block text-sm">MP4 · H.264</strong><span className="mt-1 block text-xs text-[#9daabd]">{es ? 'Codificado con los componentes de Windows; usa aceleración de hardware si está disponible.' : 'Encoded with Windows components; uses hardware acceleration when available.'}</span></div>
                 <div className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
-                    <div><span className="block text-xs text-[#8190a5]">{es ? 'Formato' : 'Format'}</span><strong>{format === 'mp4' ? 'MP4 · MPEG-4 Parte 2' : 'MOV · ProRes 4444'}</strong></div>
+                    <div><span className="block text-xs text-[#8190a5]">{es ? 'Formato' : 'Format'}</span><strong>MP4 · H.264</strong></div>
                     <div><span className="block text-xs text-[#8190a5]">{es ? 'Resolución' : 'Resolution'}</span><strong>{metadata ? `${metadata.width} × ${metadata.height}` : '—'}</strong></div>
-                    <div><span className="block text-xs text-[#8190a5]">{es ? 'Audio' : 'Audio'}</span><strong>{format === 'mp4' ? 'AAC 320 kb/s' : 'PCM 24-bit'}</strong></div>
+                    <div><span className="block text-xs text-[#8190a5]">{es ? 'Audio' : 'Audio'}</span><strong>AAC 320 kb/s</strong></div>
                 </div>
-                <p className="mt-5 text-xs leading-relaxed text-[#96a5b9]">{format === 'mp4' ? (es ? 'Conserva la resolución y los tiempos del original. Este FFmpeg no incluye H.264; algunas plataformas podrían no aceptar su códec MPEG-4 Parte 2.' : 'Keeps the source resolution and timing. This FFmpeg build has no H.264 encoder; some platforms may not accept MPEG-4 Part 2.') : (es ? 'Conserva la resolución y los tiempos del original. ProRes prioriza la fidelidad visual y genera un archivo grande.' : 'Keeps the source resolution and timing. ProRes prioritizes visual fidelity and creates a large file.')}</p>
+                <p className="mt-5 text-xs leading-relaxed text-[#96a5b9]">{es ? 'Conserva la resolución y los tiempos del original. La exportación continúa por CPU si no hay codificador de hardware.' : 'Keeps the source resolution and timing. Export continues on CPU if no hardware encoder is available.'}</p>
                 {!available && <p className="mt-4 text-sm text-amber-300" role="status">{es ? 'Selecciona un video local y espera a que cargue para exportarlo.' : 'Select a local video and wait for it to load before exporting.'}</p>}
+                {project.videoPath && !metadata && <a className="mt-2 inline-block text-xs text-primary underline" href="https://support.microsoft.com/es-es/windows/experience/platform-variants/media-feature-pack-for-windows-n" target="_blank" rel="noreferrer">{es ? '¿Windows N? Instala los componentes multimedia de Microsoft' : 'Windows N? Install Microsoft media components'}</a>}
                 {error && <p className="mt-4 text-sm text-red-300" role="alert">{error}</p>}
-                {output && <div className="mt-5 flex items-start gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300" role="status"><CheckIcon className="size-5 shrink-0"/><span>{es ? 'Video guardado en' : 'Video saved to'} <strong className="break-all">{output}</strong></span></div>}
-                {busy && <div className="mt-5" role="status"><div className="mb-2 flex justify-between text-xs text-[#a9b8cb]"><span>{phase}</span><span>{progress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[#273247]"><div className="h-full bg-primary transition-[width]" style={{width: `${progress}%`}}/></div></div>}
+                {error.includes('Media Feature Pack') && <a className="mt-2 inline-block text-sm text-primary underline" href="https://support.microsoft.com/es-es/windows/experience/platform-variants/media-feature-pack-for-windows-n" target="_blank" rel="noreferrer">{es ? 'Instalar componentes multimedia de Windows N' : 'Install Windows N media components'}</a>}
+                {output && <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-300" role="status"><CheckIcon className="size-5 shrink-0"/><span className="min-w-0 flex-1">{es ? 'Video guardado en' : 'Video saved to'} <strong className="break-all">{output}</strong></span><button type="button" onClick={() => void openExportLocation()} className="shrink-0 rounded-lg border border-emerald-400/40 px-3 py-2 font-semibold hover:bg-emerald-500/15">{es ? 'Abrir ubicación' : 'Open location'}</button></div>}
+                {busy && <div className="mt-5" role="status"><div className="mb-2 flex justify-between text-xs text-[#a9b8cb]"><span>{phase}{device ? ` · ${device === 'system' ? (es ? 'Códec de Windows' : 'Windows codec') : device === 'nvidia' ? 'NVIDIA GPU' : device === 'gpu' ? 'GPU' : 'CPU'}` : ''}</span><span>{progress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[#273247]"><div className="h-full bg-primary transition-[width]" style={{width: `${progress}%`}}/></div></div>}
                 <div className="mt-6 flex gap-3">
                     <button type="button" onClick={() => void exportVideo()} disabled={!available || busy} className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"><DownloadIcon className="size-4"/>{es ? 'Exportar video' : 'Export video'}</button>
                     {busy && <button type="button" onClick={cancel} className="rounded-xl border border-[#344056] px-5 py-3 text-sm font-bold hover:bg-[#1d2637]">{es ? 'Cancelar' : 'Cancel'}</button>}

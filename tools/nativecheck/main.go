@@ -48,25 +48,33 @@ func main() {
 	if runtime.GOOS == "windows" {
 		ext = ".exe"
 	}
-	ffmpeg := filepath.Join(*dir, "ffmpeg"+ext)
+	windows := *target == "windows-amd64"
+	mediaName := "ffmpeg" + ext
+	if windows {
+		mediaName = "windows-media.exe"
+	}
+	mediaTool := filepath.Join(*dir, mediaName)
 	whisper := filepath.Join(*dir, "whisper-cli"+ext)
-	for _, path := range []string{ffmpeg, whisper} {
+	for _, path := range []string{mediaTool, whisper} {
 		if info, err := os.Stat(path); err != nil || info.IsDir() {
 			fail("required native binary is missing: " + path)
 		}
 	}
-	version := run(ffmpeg, "-version")
-	buildconf := run(ffmpeg, "-buildconf")
-	for _, forbidden := range []string{"--enable-gpl", "--enable-nonfree", "--enable-libx264", "--enable-libx265", "--enable-libxvid", "--enable-libvidstab"} {
-		for _, field := range strings.Fields(buildconf) {
-			if field == forbidden {
-				fail("FFmpeg is not approved for this LGPL bundle: " + forbidden)
+	version, buildconf := "", ""
+	if !windows {
+		version = run(mediaTool, "-version")
+		buildconf = run(mediaTool, "-buildconf")
+		for _, forbidden := range []string{"--enable-gpl", "--enable-nonfree", "--enable-libx264", "--enable-libx265", "--enable-libxvid", "--enable-libvidstab"} {
+			for _, field := range strings.Fields(buildconf) {
+				if field == forbidden {
+					fail("FFmpeg is not approved for this LGPL bundle: " + forbidden)
+				}
 			}
 		}
-	}
-	ffmpegVersion := read(filepath.Join(*metadata, "ffmpeg", "VERSION"))
-	if !strings.HasPrefix(version, "ffmpeg version "+ffmpegVersion+" ") || !strings.Contains(buildconf, "configuration:") {
-		fail("FFmpeg version/configuration does not match the pinned release")
+		ffmpegVersion := read(filepath.Join(*metadata, "ffmpeg", "VERSION"))
+		if !strings.HasPrefix(version, "ffmpeg version "+ffmpegVersion+" ") || !strings.Contains(buildconf, "configuration:") {
+			fail("FFmpeg version/configuration does not match the pinned release")
+		}
 	}
 	whisperVersion := run(whisper, "--version")
 	wantWhisper := "whisper.cpp version: " + read(filepath.Join(*metadata, "whisper", "VERSION"))
@@ -92,11 +100,19 @@ func main() {
 	}
 	if *candidate {
 		write(filepath.Join(*dir, "SHA256SUMS"), hashes)
-		write(filepath.Join(*dir, "build-config.txt"), strings.TrimSpace(buildconf)+"\n")
+		if !windows {
+			write(filepath.Join(*dir, "build-config.txt"), strings.TrimSpace(buildconf)+"\n")
+		}
 		fmt.Println("Candidate recorded; NOT approved for distribution:", *dir)
 	} else {
-		if strings.TrimSpace(buildconf) != read(filepath.Join(*metadata, "ffmpeg", "build-config-"+*target+".txt")) {
-			fail("FFmpeg -buildconf differs from the approved configuration")
+		if !windows {
+			configTarget := *target
+			if *variant == "gpu" {
+				configTarget += "-gpu"
+			}
+			if strings.TrimSpace(buildconf) != read(filepath.Join(*metadata, "ffmpeg", "build-config-"+configTarget+".txt")) {
+				fail("FFmpeg -buildconf differs from the approved configuration")
+			}
 		}
 		approval := *target
 		if *variant == "gpu" {
@@ -111,7 +127,11 @@ func main() {
 		fmt.Println("Native dependency validation passed:", *target)
 	}
 	if *report != "" {
-		write(*report, "FFmpeg -version\n"+version+"\nFFmpeg -buildconf\n"+buildconf+"\nwhisper-cli --version\n"+whisperVersion+"\nSHA256SUMS\n"+hashes)
+		mediaReport := "Windows Media Foundation\n"
+		if !windows {
+			mediaReport = "FFmpeg -version\n" + version + "\nFFmpeg -buildconf\n" + buildconf + "\n"
+		}
+		write(*report, mediaReport+"whisper-cli --version\n"+whisperVersion+"\nSHA256SUMS\n"+hashes)
 	}
 }
 
@@ -140,7 +160,7 @@ func nativeHashes(dir, ext string) string {
 		if entry.IsDir() {
 			fail("unexpected directory in native bundle: " + name)
 		}
-		if name == "ffmpeg"+ext || name == "whisper-cli"+ext || strings.HasSuffix(strings.ToLower(name), ".dll") || strings.HasSuffix(strings.ToLower(name), ".dylib") {
+		if name == "ffmpeg"+ext || name == "windows-media.exe" || name == "whisper-cli"+ext || strings.HasSuffix(strings.ToLower(name), ".dll") || strings.HasSuffix(strings.ToLower(name), ".dylib") {
 			names = append(names, name)
 		} else if strings.HasSuffix(strings.ToLower(name), ".exe") {
 			fail("unexpected executable in native bundle: " + name)

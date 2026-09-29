@@ -1,8 +1,10 @@
 # Native dependencies and release packaging
 
-`whisper-cli` and FFmpeg are resolved only from the executable's bundle in
-production. Wails development builds may use `TEXTMOTION_WHISPER_PATH` and
-`TEXTMOTION_FFMPEG_PATH`; release builds ignore those environment variables.
+Windows resolves `whisper-cli` and the small `windows-media.exe` Media Foundation
+helper from the application bundle. Video and audio codecs are supplied by
+Windows. macOS still resolves bundled FFmpeg and `whisper-cli`. Wails development
+builds may use `TEXTMOTION_WHISPER_PATH`, `TEXTMOTION_MEDIA_PATH` (Windows), or
+`TEXTMOTION_FFMPEG_PATH` (macOS); release builds ignore those overrides.
 Missing files produce a friendly caption-generation error and a detailed log.
 
 | Target | Native tools | Notices |
@@ -11,11 +13,21 @@ Missing files produce a friendly caption-generation error and a detailed log.
 | macOS arm64 | `.app/Contents/Resources/bin/darwin-arm64/` | `.app/Contents/Resources/` |
 | macOS x64 | `.app/Contents/Resources/bin/darwin-amd64/` | `.app/Contents/Resources/` |
 
-## FFmpeg
+## Windows media helper
+
+`native/windows-media/main.cpp` uses the Windows Media Foundation source reader,
+H.264/AAC encoders and MP4 sink. `scripts/native/build-windows-media.ps1` builds
+it with Visual C++ and a static C runtime. The installer includes the helper,
+not FFmpeg, and the release checker pins its SHA-256 with the Whisper binary.
+On Windows N, users can install Microsoft's Media Feature Pack as an optional
+Windows feature. MP4 export requires H.264 and AAC encoders. MOV/ProRes export
+is unavailable in the Windows build.
+
+## FFmpeg (macOS only)
 
 Source is pinned to official FFmpeg 9.0.2, tag `n9.0.2`, commit recorded in
-`third_party/ffmpeg/SOURCE.txt`. This version is selected as source; **no built
-binary is approved yet**. The Windows/macOS build scripts compile the official
+`third_party/ffmpeg/SOURCE.txt`. macOS binaries remain unapproved.
+The macOS build script compiles the official
 tag without external codec libraries, capture `ffmpeg -buildconf`, and produce
 source archives plus `changes.diff`. A known local Windows 8.1.1 build is
 GPL-enabled and remains excluded from release. The application invokes FFmpeg
@@ -34,8 +46,8 @@ and no dynamic ggml backend. Its candidate SHA-256 is recorded in
 `third_party/whisper/SHA256SUMS.windows-amd64-msvc-candidate`; `dumpbin` reports
 only KERNEL32.dll and ADVAPI32.dll imports. The old locally staged Windows
 1.9.2 executable predates this process and remains unapproved. The new
-candidate is **also not approved as a complete release bundle** until paired
-with the controlled FFmpeg build and tested in the installer.
+candidate must be paired with the Windows media helper and checked against
+the approved bundle hashes.
 
 ### Optional Windows CUDA + Vulkan build
 
@@ -46,20 +58,23 @@ script copies only CUDA DLLs found in the binary import tree and rejects
 unresolved imports. The NVIDIA graphics driver and Vulkan driver remain
 system dependencies. Neither development SDK is included in the installer.
 
-The script combines the GPU build with the already approved FFmpeg executable
-from `build/bin/bin/windows-amd64/` and writes
-`build/bin/native-candidates/windows-amd64-gpu/`. Review its source archive,
-DLL_IMPORTS.txt, CMake cache, CUDA EULA and SHA256SUMS. After testing on NVIDIA,
-Vulkan-only and CPU-only systems, approve the exact hashes as
+The whisper build script combines the GPU build with the Windows Media
+Foundation helper and writes `build/bin/native-candidates/windows-amd64-gpu/`.
+Its DLL imports, CMake cache,
+CUDA EULA and hashes were reviewed. CUDA, forced CPU, Vulkan-only and automatic
+CPU fallback transcription passed locally on an RTX 4060 Ti host; actual
+AMD/Intel GPU machines have not been tested. The approved native hashes are in
 `third_party/approved/windows-amd64-gpu.sha256`. Package with
-`scripts/package-windows.ps1 -NativeDirectory <candidate> -Variant gpu`.
-The release checker refuses a GPU installer until that approval file exists.
+`scripts/package-windows.ps1 -NativeDirectory build/bin/native-candidates/windows-amd64-gpu -Variant gpu`.
+The release checker refuses a GPU installer if that approval file is missing
+or any approved binary changes.
 The existing CPU release process and approval remain separate.
 
 Settings persist an Auto/CPU choice. Auto lets whisper.cpp select CUDA, then
 Vulkan, then CPU according to available backend devices. CPU passes
-`--no-gpu` to the transcription process. This setting does not affect FFmpeg
-video export.
+`--no-gpu` to the transcription process. MP4 export uses Windows Media
+Foundation and enables hardware encoder transforms when available, with the
+Windows software encoder available as fallback.
 
 ## Models
 
@@ -84,13 +99,13 @@ identity or notarization workflow is configured yet.
 
 On Windows x64, run `scripts/native/build-whisper-windows.ps1` with Visual
 Studio/CMake, then pass its candidate directory to
-`scripts/native/build-windows.sh` under MSYS2 UCRT64 with GCC and make. On
+`scripts/native/build-windows.sh` under MSYS2 UCRT64. On
 native macOS arm64 and Intel hosts with
 Xcode CLI tools and CMake, run `scripts/native/build-macos.sh`. Neither script
 has been executed in this Windows environment. Both pin official Git tags and
 commits, then create candidate artifacts under `build/bin/`:
 
-- `ffmpeg-9.0.2-<target>/`: executable, version, LGPL, source identification,
+- `ffmpeg-9.0.2-darwin-<arch>/`: executable, version, LGPL, source identification,
   captured build config, SHA256SUMS, exact source archive and `changes.diff`.
 - `whisper-1.9.2-<target>/`: executable, version, MIT license, source ID, CMake
   cache/build configuration, SHA256SUMS and exact source archive.
@@ -99,25 +114,21 @@ commits, then create candidate artifacts under `build/bin/`:
 
 The build scripts run `go run ./tools/nativecheck -candidate -target <target>
 -dir <candidate-dir>`. This records hashes and configuration but explicitly
-does **not** approve the candidate. Review provenance, FFmpeg configuration,
-binary imports, codec compatibility and source package first. Then copy the
-captured FFmpeg configuration into
-`third_party/ffmpeg/build-config-<target>.txt` and the combined SHA256SUMS into
+does **not** approve the candidate. Review provenance, binary imports, codec
+compatibility and source package first. For macOS also review FFmpeg configuration.
+Copy the combined SHA256SUMS into
 `third_party/approved/<target>.sha256`. Normal `go run ./tools/nativecheck`
 is strict and fails while those files are absent or any byte changes.
 
 On Windows, pass the approved combined directory to
 `scripts/package-windows.ps1 -NativeDirectory <directory>`. The checker runs
-before staging, then Wails builds NSIS. The installer includes notices and the
-complete FFmpeg LGPL text. Plain `wails build -nsis` is not a release workflow:
+on staged files, then Wails builds NSIS. Plain `wails build -nsis` is not a release workflow:
 it does not validate native provenance or hashes.
 
 On macOS, first build the appropriate Wails `.app`, then run
 `scripts/package-macos.sh arm64|amd64 <native-directory> <app-bundle>` before
 codesign/notarization. This has not been verified on a macOS host.
 
-There is currently no `.github/workflows` pipeline in this repository. The
-native scripts are ready for native runners, but no CI build or final Windows
-installer/macOS bundle has been verified. The Windows MSVC whisper candidate
-was compiled locally; the host lacks MSYS2 for FFmpeg. Installing a system
-toolchain was intentionally not done as part of validation.
+There is currently no `.github/workflows` pipeline in this repository. A GPU
+Windows NSIS installer was built locally from the approved binaries. No macOS
+bundle or cross-vendor GPU hardware test has been verified.

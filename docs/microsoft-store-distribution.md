@@ -23,7 +23,7 @@ owner explicitly changes the distribution strategy:
   Whisper models, temporary audio, caches, and user projects belong in supported
   per-user data or user-selected locations.
 - Do not require administrator elevation for application functionality.
-- Keep `ffmpeg.exe`, `whisper-cli.exe`, and required DLLs package-relative at
+- Keep `windows-media.exe`, `whisper-cli.exe`, and required DLLs package-relative at
   `bin/windows-amd64/`; production path resolution depends on this layout.
 - Declare the Wails executable as a full-trust desktop application using
   `EntryPoint="Windows.FullTrustApplication"` and the restricted
@@ -48,9 +48,8 @@ The MSIX staging root must contain at least:
 AppxManifest.xml
 TextMotionStudio.exe
 THIRD_PARTY_NOTICES.txt
-FFMPEG_LICENSE.txt
 Assets/
-bin/windows-amd64/ffmpeg.exe
+bin/windows-amd64/windows-media.exe
 bin/windows-amd64/whisper-cli.exe
 bin/windows-amd64/*.dll
 ```
@@ -68,12 +67,9 @@ is required for the Store MSIX submission.
 
 ## Licensing remains separate from signing
 
-Store signing does not remove third-party license obligations. The public
-product/download page must provide the exact corresponding FFmpeg source,
-captured build configuration, and changes file, and must display the required
-FFmpeg/LGPL attribution. See the
-[FFmpeg license compliance checklist](https://ffmpeg.org/legal.html) and
-`docs/native-dependencies.md`.
+Store signing does not remove third-party license obligations. The Windows
+package includes Whisper and optional CUDA runtime notices; Windows provides
+the media codecs through Media Foundation. See `docs/native-dependencies.md`.
 
 ## Work deferred until release preparation
 

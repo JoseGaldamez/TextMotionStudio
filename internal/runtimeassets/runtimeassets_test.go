@@ -22,12 +22,18 @@ func TestResolveBundledAndDevelopmentOverride(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		ext = ".exe"
 	}
-	for _, name := range []string{"ffmpeg", "whisper-cli"} {
+	mediaTool := "ffmpeg"
+	mediaOverride := "TEXTMOTION_FFMPEG_PATH"
+	if runtime.GOOS == "windows" {
+		mediaTool = "windows-media"
+		mediaOverride = "TEXTMOTION_MEDIA_PATH"
+	}
+	for _, name := range []string{mediaTool, "whisper-cli"} {
 		if err := os.WriteFile(filepath.Join(dir, name+ext), nil, 0755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	t.Setenv("TEXTMOTION_FFMPEG_PATH", filepath.Join(root, "missing"))
+	t.Setenv(mediaOverride, filepath.Join(root, "missing"))
 	if _, err := Resolve(root, true); err == nil {
 		t.Fatal("development override should be checked")
 	}
@@ -35,7 +41,11 @@ func TestResolveBundledAndDevelopmentOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resources.FFmpegPath != filepath.Join(dir, "ffmpeg"+ext) {
-		t.Fatalf("unexpected ffmpeg path: %s", resources.FFmpegPath)
+	mediaPath := resources.FFmpegPath
+	if runtime.GOOS == "windows" {
+		mediaPath = resources.MediaPath
+	}
+	if mediaPath != filepath.Join(dir, mediaTool+ext) {
+		t.Fatalf("unexpected media tool path: %s", mediaPath)
 	}
 }

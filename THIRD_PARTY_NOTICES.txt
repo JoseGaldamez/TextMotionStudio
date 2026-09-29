@@ -46,15 +46,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-FFmpeg
+FFmpeg (macOS builds only)
 Official project: https://ffmpeg.org/
 License: GNU Lesser General Public License, version 2.1 or later, provided
 the selected build contains no GPL or nonfree components.
 Copyright (c) 2000-2026 the FFmpeg developers and other contributors.
-Complete LGPL 2.1 text: FFMPEG_LICENSE.txt, installed beside this file.
-Corresponding source and exact build configuration must be published before
-commercial release. Planned source page (not yet live):
-https://textmotionstudio.com/opensource/ffmpeg
+The macOS bundle includes the complete LGPL 2.1 text as FFMPEG_LICENSE.txt.
 
 Optional NVIDIA CUDA transcription backend (Windows GPU build only)
 CUDA Toolkit runtime libraries are distributed under the NVIDIA Software

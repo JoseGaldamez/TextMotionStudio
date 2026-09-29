@@ -12,7 +12,6 @@ $version = (Get-Content -Raw (Join-Path $project 'third_party/whisper/VERSION'))
 $source = Join-Path $project 'build/bin/native-source/windows-amd64/whisper.cpp'
 $build = Join-Path $project 'build/gpu-whisper'
 $candidate = Join-Path $project 'build/bin/native-candidates/windows-amd64-gpu'
-$ffmpeg = Join-Path $project 'build/bin/bin/windows-amd64/ffmpeg.exe'
 $expectedCommit = '306c88f4d1286aec1bf96e544632897886af5501'
 
 if (-not $CudaToolkit -or -not (Test-Path -LiteralPath (Join-Path $CudaToolkit 'bin/nvcc.exe') -PathType Leaf)) {
@@ -23,7 +22,7 @@ if (-not $VulkanSdk -or -not (Test-Path -LiteralPath (Join-Path $VulkanSdk 'Bin/
 }
 $env:VULKAN_SDK = $VulkanSdk
 $env:CUDA_PATH = $CudaToolkit
-foreach ($file in @($CudaEula, $ffmpeg, $source)) {
+foreach ($file in @($CudaEula, $source)) {
     if (-not (Test-Path -LiteralPath $file)) { throw "Required input missing: $file" }
 }
 if (Test-Path -LiteralPath $candidate) { throw "Candidate already exists: $candidate" }
@@ -38,7 +37,7 @@ if ((& git -C $source status --porcelain).Count -ne 0) { throw 'whisper.cpp sour
     -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON `
     -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 if ($LASTEXITCODE -ne 0) { throw 'GPU CMake configuration failed.' }
-& cmake --build $build --config Release --target whisper-cli --parallel 4
+& cmake --build $build --config Release --target whisper-cli --parallel 12
 if ($LASTEXITCODE -ne 0) { throw 'GPU whisper-cli build failed.' }
 
 $built = Join-Path $build 'bin/Release'
@@ -46,7 +45,7 @@ foreach ($name in @('whisper-cli.exe', 'ggml-cpu.dll', 'ggml-vulkan.dll', 'ggml-
     if (-not (Test-Path -LiteralPath (Join-Path $built $name) -PathType Leaf)) { throw "Built component missing: $name" }
 }
 New-Item -ItemType Directory -Path $candidate | Out-Null
-Copy-Item -LiteralPath $ffmpeg -Destination $candidate
+& (Join-Path $project 'scripts/native/build-windows-media.ps1') -OutputDirectory $candidate
 Copy-Item -LiteralPath (Join-Path $built 'whisper-cli.exe') -Destination $candidate
 Get-ChildItem -LiteralPath $built -Filter '*.dll' -File | Copy-Item -Destination $candidate
 
@@ -65,8 +64,11 @@ while ($queue.Count -gt 0) {
         $imports.Add("$([IO.Path]::GetFileName($binary)): $name")
         $local = Join-Path $candidate $name
         if (Test-Path -LiteralPath $local -PathType Leaf) { $queue.Enqueue($local); continue }
-        $sdkFile = Join-Path $CudaToolkit "bin/$name"
-        if (Test-Path -LiteralPath $sdkFile -PathType Leaf) {
+        $sdkFile = @(
+            (Join-Path $CudaToolkit "bin/$name"),
+            (Join-Path $CudaToolkit "bin/x64/$name")
+        ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+        if ($sdkFile) {
             if ($name -notmatch '^(?i:cudart64_|cublas64_|cublasLt64_|nvrtc64_|nvrtc-builtins64_|nvJitLink_)') {
                 throw "CUDA dependency is not on the redistributable allowlist: $name"
             }
@@ -74,7 +76,7 @@ while ($queue.Count -gt 0) {
             $queue.Enqueue($local)
             continue
         }
-        if ($name -ieq 'nvcuda.dll' -or $name -ieq 'vulkan-1.dll') { continue }
+        if ($name -ieq 'nvcuda.dll' -or $name -ieq 'vulkan-1.dll' -or $name -match '^(?i:api-ms-win-|ext-ms-win-)') { continue }
         if ($name -match '^(?i:vcruntime|msvcp|concrt)') {
             throw "Unbundled Visual C++ runtime dependency: $name"
         }
@@ -88,7 +90,6 @@ Copy-Item -LiteralPath $CudaEula -Destination (Join-Path $candidate 'CUDA_EULA.t
 Copy-Item -LiteralPath (Join-Path $project 'third_party/whisper/LICENSE') -Destination (Join-Path $candidate 'WHISPER_LICENSE.txt')
 Copy-Item -LiteralPath (Join-Path $project 'third_party/whisper/SOURCE.txt') -Destination (Join-Path $candidate 'WHISPER_SOURCE.txt')
 Copy-Item -LiteralPath (Join-Path $project 'THIRD_PARTY_NOTICES.txt') -Destination $candidate
-Copy-Item -LiteralPath (Join-Path $project 'third_party/ffmpeg/LICENSE') -Destination (Join-Path $candidate 'FFMPEG_LICENSE.txt')
 Copy-Item -LiteralPath (Join-Path $build 'CMakeCache.txt') -Destination (Join-Path $candidate 'WHISPER_build-config.txt')
 Set-Content -LiteralPath (Join-Path $candidate 'DLL_IMPORTS.txt') -Value $imports -Encoding ascii
 & git -C $source archive --format=tar.gz "--output=$(Join-Path $candidate 'whisper-source.tar.gz')" HEAD

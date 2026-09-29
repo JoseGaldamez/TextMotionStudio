@@ -208,6 +208,7 @@ function App() {
             setAppConfig(await UpdateTranscriptionDevice(device));
         } catch (err) {
             console.error('Failed to update transcription device', err);
+            throw err;
         }
     };
 

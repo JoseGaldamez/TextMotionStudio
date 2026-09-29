@@ -29,6 +29,8 @@ export function Greet(arg1:string):Promise<string>;
 
 export function ListModels():Promise<Array<models.Info>>;
 
+export function OpenExportLocation(arg1:string):Promise<void>;
+
 export function RegisterVideoFile(arg1:string):Promise<Record<string, string>>;
 
 export function SelectModel(arg1:string):Promise<void>;

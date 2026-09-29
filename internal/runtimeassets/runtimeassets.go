@@ -10,17 +10,25 @@ import (
 
 type Resources struct {
 	FFmpegPath  string
+	MediaPath   string
 	WhisperPath string
 }
 
 // Resolve uses only binaries shipped beside the application in production.
 // Overrides are available solely to Wails development builds.
 func Resolve(root string, development bool) (Resources, error) {
-	ffmpeg, err := binary(root, development, "ffmpeg", "TEXTMOTION_FFMPEG_PATH")
+	whisper, err := binary(root, development, "whisper-cli", "TEXTMOTION_WHISPER_PATH")
 	if err != nil {
 		return Resources{}, err
 	}
-	whisper, err := binary(root, development, "whisper-cli", "TEXTMOTION_WHISPER_PATH")
+	if runtime.GOOS == "windows" {
+		media, err := binary(root, development, "windows-media", "TEXTMOTION_MEDIA_PATH")
+		if err != nil {
+			return Resources{}, err
+		}
+		return Resources{MediaPath: media, WhisperPath: whisper}, nil
+	}
+	ffmpeg, err := binary(root, development, "ffmpeg", "TEXTMOTION_FFMPEG_PATH")
 	if err != nil {
 		return Resources{}, err
 	}

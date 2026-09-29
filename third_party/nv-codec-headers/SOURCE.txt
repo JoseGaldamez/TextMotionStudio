@@ -1,0 +1,5 @@
+Project: FFmpeg nv-codec-headers
+URL: https://github.com/FFmpeg/nv-codec-headers
+Tag: n12.1.14.1
+Commit: 7c8e7fc751f803c672b42c37d9199c8a4f98b327
+Licensing: MIT-style notices in each header file.

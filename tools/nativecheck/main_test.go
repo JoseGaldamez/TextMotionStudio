@@ -16,7 +16,11 @@ func TestNativeHashesIncludesOnlyNativeFiles(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		ext = ".exe"
 	}
-	for _, name := range []string{"ffmpeg" + ext, "whisper-cli" + ext} {
+	mediaName := "ffmpeg" + ext
+	if runtime.GOOS == "windows" {
+		mediaName = "windows-media.exe"
+	}
+	for _, name := range []string{mediaName, "whisper-cli" + ext} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -25,7 +29,7 @@ func TestNativeHashesIncludesOnlyNativeFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := nativeHashes(dir, ext)
-	for _, name := range []string{"ffmpeg" + ext, "whisper-cli" + ext} {
+	for _, name := range []string{mediaName, "whisper-cli" + ext} {
 		want := fmt.Sprintf("%x  %s", sha256.Sum256([]byte(name)), name)
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing hash %s in %s", want, got)
